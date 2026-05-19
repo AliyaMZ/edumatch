@@ -3,6 +3,7 @@ import { Sparkles, Clock, DollarSign, Video, FileText, Code, X, User } from 'luc
 import { useNavigate } from 'react-router-dom';
 import api from '../../api/axios';
 import * as S from './profile_styles';
+import { toast } from 'react-hot-toast';
 
 export function ProfilePage() {
   const navigate = useNavigate();
@@ -82,31 +83,46 @@ useEffect(() => {
 
   // 3. Сохранение обновлений
   const handleSubmitProfile = async () => {
-    if (!username.trim()) return alert("Пожалуйста, введите ваше имя");
-    if (!goal.trim()) return alert("Пожалуйста, укажите вашу цель обучения");
-    if (formats.length === 0) return alert("Пожалуйста, выберите хотя бы один удобный формат обучения");
+    // Используем toast вместо alert для валидации
+    if (!username.trim()) {
+      toast.error("Пожалуйста, введите ваше имя");
+      return;
+    }
+    if (!goal.trim()) {
+      toast.error("Пожалуйста, укажите вашу цель обучения");
+      return;
+    }
+    if (formats.length === 0) {
+      toast.error("Пожалуйста, выберите хотя бы один удобный формат обучения");
+      return;
+    }
 
     setLoading(true);
     try {
+      const formattedToUppercase = formats.map(f => f.toUpperCase());
+
       const profileData = {
         username: username.trim(),
         goal: goal.trim(),
-        level: level.toUpperCase(), // Отправляем обратно в верхнем регистре, если бэкенд ждет Enum
-        hoursPerWeek: hours,
-        budget,
-        preferredFormats: formats,
-        interests
+        level: level.toUpperCase(),
+        hoursPerWeek: Number(hours),
+        budget: Number(budget),
+        preferredFormats: formattedToUppercase,
+        interests: interests
       };
 
       await api.put(`/users/${userId}/profile`, profileData);
       
       localStorage.setItem('userName', username.trim());
       
-      alert('Профиль успешно обновлен!');
+      toast.success('Профиль успешно обновлен!'); // Заменено
       navigate('/dashboard'); 
-    } catch (err) {
+    } catch (err: any) {
       console.error("Ошибка при сохранении профиля:", err);
-      alert('Не удалось сохранить изменения. Попробуйте позже.');
+      const serverMessage = err.response?.data?.message || err.message;
+      
+      // Заменено: красивый вывод ошибки с сервера
+      toast.error(`Не удалось сохранить изменения: ${serverMessage}`);
     } finally {
       setLoading(false);
     }

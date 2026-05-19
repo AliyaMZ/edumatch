@@ -9,21 +9,27 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-import org.springframework.web.filter.CorsFilter;
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.http.HttpMethod;
 
 import java.util.Arrays;
 
+import aliya.edumatch.config.JwtFilter;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.beans.factory.annotation.Autowired;
+
 @Configuration
 @EnableWebSecurity
-@EnableMethodSecurity
 public class SecurityConfig {
 
+    @Autowired
+    private JwtFilter jwtFilter;
+
+    // Переделываем в CorsConfigurationSource — это стандарт для Spring Security 6
     @Bean
-    public CorsFilter corsFilter() {
+    public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration corsConfiguration = new CorsConfiguration();
         corsConfiguration.setAllowedOriginPatterns(Arrays.asList(
                 "http://localhost:3000",
@@ -32,13 +38,13 @@ public class SecurityConfig {
                 "http://127.0.0.1:5173"
         ));
         corsConfiguration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        corsConfiguration.setAllowedHeaders(Arrays.asList("*")); // Упрощаем для теста, разрешаем все заголовки
+        corsConfiguration.setAllowedHeaders(Arrays.asList("*"));
         corsConfiguration.setAllowCredentials(true);
         corsConfiguration.setMaxAge(1800L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", corsConfiguration);
-        return new CorsFilter(source);
+        return source;
     }
 
     @Bean
@@ -46,39 +52,25 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder(12);
     }
 
+    // В SecurityConfig.java замени метод filterChain на этот:
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                // 1. Включаем CORS и передаем наш фильтр
-                .addFilterBefore(corsFilter(), UsernamePasswordAuthenticationFilter.class)
-
-                // 2. Отключаем CSRF, так как используем stateless REST API
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(csrf -> csrf.disable())
-
-                // 3. ЯВНО отключаем базовую и формовую авторизацию Spring
-                .formLogin(form -> form.disable())
-                .httpBasic(basic -> basic.disable())
-
-                // 4. Настраиваем доступы к эндпоинтам
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                // Добавь это для диагностики
+                .exceptionHandling(ex -> ex.authenticationEntryPoint((request, response, authException) -> {
+                    System.out.println("DEBUG: Auth failure: " + authException.getMessage());
+                    response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized");
+                }))
                 .authorizeHttpRequests(auth -> auth
-                        // Разрешаем запросы к авторизации и пользователям
-                        .requestMatchers("/api/auth/**", "/api/users/**").permitAll()
-
-                        // 🔥 ДОБАВЛЕНО: Разрешаем GET-запросы к курсам для всех (публичный просмотр)
-                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/courses/**").permitAll()
-
-                        // Все остальные запросы (POST/DELETE для курсов, админка, приватные эндпоинты) требуют токен
+                        .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        .requestMatchers("/api/users/**").authenticated() // Здесь требуется авторизация
                         .anyRequest().authenticated()
                 )
-
-                // 5. Переопределяем поведение при ошибках, возвращая 401 JSON
-                .exceptionHandling(exception -> exception
-                        .authenticationEntryPoint((request, response, authException) -> {
-                            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                            response.setContentType("application/json;charset=UTF-8");
-                            response.getWriter().write("{\"error\": \"Unauthorized\", \"message\": \"Access Denied\"}");
-                        })
-                );
+                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }

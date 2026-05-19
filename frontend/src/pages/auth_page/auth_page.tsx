@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { Mail, Lock, ArrowRight, User } from 'lucide-react'; 
 import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../../api/axios'; 
-
+import { toast } from 'react-hot-toast';
 import * as A from './auth_styles';
 import vkLogo from '../../assets/vklogo.png';
 
 export function AuthPage() {
   const [isLogin, setIsLogin] = useState(true);
+  const [isLoading, setIsLoading] = useState(false); // Добавлено состояние загрузки
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -15,7 +16,6 @@ export function AuthPage() {
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState(''); 
 
-  // Переключение между логин/регистрация из URL-параметров
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const mode = params.get('mode');
@@ -23,66 +23,61 @@ export function AuthPage() {
     else if (mode === 'login') setIsLogin(true);
   }, [location]);
 
-  // --- ОБНОВЛЁННЫЙ ОБРАБОТЧИК ---
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsLoading(true); // Блокируем кнопку
     
+    const safeEmail = (email || '').trim().toLowerCase();
+    const safePassword = password || '';
+    const safeUsername = (username || '').trim();
+
     try {
+      // Очистка старых данных сессии перед новым входом/регистрацией
+      ['token', 'userId', 'userRole', 'userName'].forEach(key => localStorage.removeItem(key));
+
       if (isLogin) {
-        // 🔐 ЛОГИКА ВХОДА
-        const response = await api.post('/users/login', {
-          email,
-          password
+        const response = await api.post('/auth/login', {
+          email: safeEmail,
+          password: safePassword
         });
 
-        const userData = response.data.user;
+        const data = response.data as { token?: string; userId?: number; role?: string };
 
-        // Сохраняем данные сессии
-        localStorage.setItem('userId', userData.id.toString());
-        localStorage.setItem('userRole', userData.role);
-        // Защита: если username пустой, запишем часть email до собаки
-        localStorage.setItem('userName', userData.username || email.split('@')[0]);
-        
-        if (response.data.token) {
-          localStorage.setItem('token', response.data.token);
-        }
+        localStorage.setItem('token', data.token || '');
+        localStorage.setItem('userId', (data.userId?.toString()) || '');
+        localStorage.setItem('userRole', data.role || 'USER');
+        localStorage.setItem('userName', safeEmail.split('@')[0] || 'User');
 
-        alert(`С возвращением, ${userData.username || 'пользователь'}!`);
+        toast.success('Успешный вход!');
         navigate('/dashboard'); 
-        
       } else {
-        // 📝 ЛОГИКА РЕГИСТРАЦИИ
-        const newUser = {
-          username: username.trim(),
-          email: email.trim().toLowerCase(), // Приводим к нижнему регистру во избежание конфликтов
-          password: password,
-          role: 'USER'
+        const registerData = {
+          username: safeUsername,
+          email: safeEmail,
+          password: safePassword
         };
 
-        const response = await api.post('/users', newUser);
-        const createdUser = response.data.user;
+        const response = await api.post('/auth/register', registerData);
+        
+        const data = response.data as { token?: string; userId?: number; role?: string };
 
-        // Автоматически "логиним" пользователя после регистрации
-        localStorage.setItem('userId', createdUser.id.toString());
-        localStorage.setItem('userRole', createdUser.role);
-        // Безопасный фолбек: если бэкенд не вернул username, берем из нашего стейта
-        localStorage.setItem('userName', createdUser.username || username);
+        localStorage.setItem('token', data.token || '');
+        localStorage.setItem('userId', (data.userId?.toString()) || '');
+        localStorage.setItem('userRole', data.role || 'USER');
+        localStorage.setItem('userName', safeUsername || 'User');
 
-        alert('Аккаунт создан! Давайте настроим ваш профиль.');
+        toast.success('Аккаунт создан! Давайте настроим ваш профиль.');
         navigate('/profile'); 
       }
     } catch (err: any) {
       console.error("❌ Ошибка аутентификации:", err);
-      
-      const errorMessage = 
-        err.response?.data?.error || 
-        err.response?.data?.message ||
-        'Ошибка доступа. Проверьте данные.';
-      
-      alert(`⚠️ ${errorMessage}`);
+      const errorMessage = err.response?.data?.message || 'Ошибка доступа.';
+      toast.error(errorMessage);
+    } finally {
+      setIsLoading(false); // Разблокируем кнопку
     }
   };
-
+  
   return (
     <A.AuthWrapper>
       <A.VisualSide>
@@ -189,9 +184,9 @@ export function AuthPage() {
               {isLogin && <button type="button">Забыли пароль?</button>}
             </A.ActionRow>
 
-            <A.MainButton type="submit">
-              {isLogin ? 'Войти' : 'Зарегистрироваться'}
-              <ArrowRight size={20} />
+            <A.MainButton type="submit" disabled={isLoading}>
+              {isLoading ? 'Загрузка...' : (isLogin ? 'Войти' : 'Зарегистрироваться')}
+              {!isLoading && <ArrowRight size={20} />}
             </A.MainButton>
           </form>
 

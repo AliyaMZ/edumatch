@@ -13,13 +13,20 @@ const api: AxiosInstance = axios.create({
   timeout: 10000,
 });
 
-// 🔹 Интерцептор запроса: добавляем JWT-токен, если он есть
+
+// 🔹 Интерцептор запроса: добавляем JWT-токен, если он реальный и валидный
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     const token = localStorage.getItem('token');
-    if (token && config.headers) {
+    
+    // 🔥 ИСПРАВЛЕНО: Жесткая проверка. Токен должен существовать и не быть строкой "undefined"/"null"
+    if (token && token !== 'undefined' && token !== 'null' && token.trim() !== '' && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
+    } else if (config.headers) {
+      // Если токена нет или он кривой — удаляем заголовок, чтобы Spring Security читал запрос как публичный
+      delete config.headers.Authorization;
     }
+    
     return config;
   },
   (error) => Promise.reject(error)
