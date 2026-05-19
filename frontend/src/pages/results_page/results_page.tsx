@@ -1,14 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useSelector, useDispatch } from 'react-redux'; // Добавлено
-import axios from 'axios';
+import { useSelector, useDispatch } from 'react-redux'; 
 import { 
   Clock, DollarSign, Video, FileText, Code, 
-  ArrowRight, Heart, Star, Brain, ChevronDown, Sparkles 
+  Heart, Star, ChevronDown, Sparkles 
 } from 'lucide-react';
-
-import { RootState, AppDispatch } from '../../store'; // Проверь путь к стору
-import { toggleFavoriteLocal } from '../../store/favoritesSlice'; // Проверь путь к слайсу
+import api from '../../api/axios'; 
+import { RootState, AppDispatch } from '../../store'; 
+import { toggleFavoriteLocal } from '../../store/favoritesSlice'; 
 import * as S from './results_styles';
 
 interface Course {
@@ -23,11 +22,9 @@ interface Course {
 
 export function ResultsPage() {
   const navigate = useNavigate();
-  const dispatch = useDispatch<AppDispatch>(); // Инициализация dispatch
+  const dispatch = useDispatch<AppDispatch>(); 
 
   const currentUserId = localStorage.getItem('userId');
-  
-  // ИЗМЕНЕНИЕ: Получаем избранное из глобального стейта Redux
   const favoriteIds = useSelector((state: RootState) => state.favorites.items);
 
   const [courses, setCourses] = useState<Course[]>([]);
@@ -46,11 +43,12 @@ export function ResultsPage() {
 
     const fetchCoursesData = async () => {
       try {
-        // Загружаем только список курсов, так как избранное уже грузится в App.tsx
-        const response = await axios.get('http://localhost:8080/api/courses');
+        setLoading(true);
+        // 🔥 ИСПРАВЛЕНО: запрос через api и относительный путь
+        const response = await api.get('/courses');
         setCourses(response.data);
       } catch (err) {
-        console.error("Ошибка загрузки курсов", err);
+        console.error("❌ Ошибка загрузки курсов:", err);
       } finally {
         setLoading(false);
       }
@@ -60,9 +58,13 @@ export function ResultsPage() {
 
   const filteredCourses = useMemo(() => {
     return courses.filter(course => {
-      const numericPrice = parseInt(course.price.replace(/\D/g, '')) || 0;
+      // 🔥 ИСПРАВЛЕНО: безопасная проверка на случай, если price равен null/undefined
+      const numericPrice = parseInt((course.price || '').replace(/\D/g, '')) || 0;
       const matchesBudget = numericPrice <= maxBudget;
-      const matchesFormat = selectedFormats.length === 0 || selectedFormats.includes(course.format);
+
+      // 🔥 ИСПРАВЛЕНО: приведение к регистру во избежание багов несовпадения строк ('Видео' vs 'видео')
+      const matchesFormat = selectedFormats.length === 0 || 
+        selectedFormats.some(f => f.toLowerCase() === (course.format || '').toLowerCase());
 
       let matchesDuration = true;
       if (selectedDurations.length > 0) {
@@ -81,30 +83,29 @@ export function ResultsPage() {
     setState(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]);
   };
 
-  // ИЗМЕНЕНИЕ: Синхронное обновление через Redux + фоновый запрос к БД
   const toggleFavorite = async (e: React.MouseEvent, courseId: number) => {
     e.stopPropagation();
     if (!currentUserId) return;
 
-    // 1. Сразу обновляем UI в Redux
+    // 1. Сразу обновляем UI в Redux (Оптимистично)
     dispatch(toggleFavoriteLocal(courseId));
 
     try {
-      // 2. Отправляем запрос в БД
+      // 2. Отправляем запрос в БД через наш api
       if (favoriteIds.includes(courseId)) {
-        await axios.delete(`http://localhost:8080/api/users/${currentUserId}/favorites/${courseId}`);
+        await api.delete(`/users/${currentUserId}/favorites/${courseId}`);
       } else {
-        await axios.post(`http://localhost:8080/api/users/${currentUserId}/favorites/${courseId}`);
+        await api.post(`/users/${currentUserId}/favorites/${courseId}`);
       }
     } catch (err) { 
-      console.error("Ошибка при обновлении БД", err);
-      // Если запрос не удался, возвращаем состояние обратно
+      console.error("❌ Ошибка при обновлении избранного в БД:", err);
+      // Если запрос не удался — возвращаем состояние обратно
       dispatch(toggleFavoriteLocal(courseId));
     }
   };
 
   if (loading) {
-    return <div style={{ textAlign: 'center', padding: '100px', color: '#64748b' }}>Загрузка рекомендаций...</div>;
+    return <S.PageWrapper><div style={{ textAlign: 'center', padding: '100px', color: '#4338ca' }}>Загрузка рекомендаций...</div></S.PageWrapper>;
   }
 
   return (
@@ -114,7 +115,7 @@ export function ResultsPage() {
           <S.FilterSection>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <h4 style={{ margin: 0 }}>Фильтры</h4>
-              <button onClick={() => setShowFilters(!showFilters)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+              <button onClick={() => setShowFilters(!showFilters)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>
                 <ChevronDown size={20} style={{ transform: showFilters ? 'rotate(180deg)' : 'none', transition: '0.3s' }} />
               </button>
             </div>
@@ -128,7 +129,7 @@ export function ResultsPage() {
                 </S.FilterSection>
 
                 <S.FilterSection>
-                  <h4 style={{ fontSize: '14px' }}>Длительность</h4>
+                  <h4 style={{ fontSize: '14px', marginBottom: '10px' }}>Длительность</h4>
                   <S.CheckboxGroup>
                     <S.CheckboxLabel>
                       <input type="checkbox" checked={selectedDurations.includes('short')} onChange={() => toggleFilter('short', selectedDurations, setSelectedDurations)} />
@@ -146,7 +147,7 @@ export function ResultsPage() {
                 </S.FilterSection>
 
                 <S.FilterSection>
-                  <h4 style={{ fontSize: '14px' }}>Формат</h4>
+                  <h4 style={{ fontSize: '14px', marginBottom: '10px' }}>Формат</h4>
                   <S.CheckboxGroup>
                     <S.CheckboxLabel>
                       <input type="checkbox" checked={selectedFormats.includes('Видео')} onChange={() => toggleFilter('Видео', selectedFormats, setSelectedFormats)} />
@@ -170,43 +171,49 @@ export function ResultsPage() {
         <main style={{ flex: 1 }}>
           <header style={{ marginBottom: '32px' }}>
             <h1 style={{ fontSize: '32px', fontWeight: 800, color: '#1e293b' }}>Ваши рекомендации</h1>
-            <p style={{ color: '#64748b' }}>Найдено: {filteredCourses.length}</p>
+            <p style={{ color: '#64748b' }}>Найдено курсов: {filteredCourses.length}</p>
           </header>
 
-          {filteredCourses.map(course => (
-            <S.Card 
-              key={course.id} 
-              onClick={() => navigate(`/details/${course.id}`, { state: { id: course.id } })}
-            >
-              <S.MatchBadge><Sparkles size={14} /> 95% Релевантности</S.MatchBadge>
-              <S.CourseTitle>{course.title}</S.CourseTitle>
-              <S.AIReasonBox>
-                <S.AIIcon>AI</S.AIIcon>
-                <p>{course.aiAnalysis}</p>
-              </S.AIReasonBox>
-              <S.MetaGrid>
-                <div><Clock size={16} /> {course.durationWeeks} недель</div>
-                <div><DollarSign size={16} /> {course.price}</div>
-                <div className="rating"><Star size={16} fill="#f59e0b" /> 4.8</div>
-              </S.MetaGrid>
-              <S.ActionRow>
-                <S.PrimaryButton 
-                  onClick={(e) => { 
-                    e.stopPropagation(); 
-                    navigate(`/details/${course.id}`, { state: { id: course.id } }); 
-                  }}
-                >
-                  Подробнее
-                </S.PrimaryButton>
-                <S.IconButton 
-                  isFavorite={favoriteIds.includes(course.id)} 
-                  onClick={(e) => toggleFavorite(e, course.id)}
-                >
-                  <Heart size={20} fill={favoriteIds.includes(course.id) ? "currentColor" : "none"} />
-                </S.IconButton>
-              </S.ActionRow>
-            </S.Card>
-          ))}
+          {filteredCourses.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '50px', color: '#64748b' }}>
+              Подходящих курсов не найдено. Попробуйте изменить параметры фильтров.
+            </div>
+          ) : (
+            filteredCourses.map(course => (
+              <S.Card 
+                key={course.id} 
+                onClick={() => navigate(`/details/${course.id}`, { state: { id: course.id } })}
+              >
+                <S.MatchBadge><Sparkles size={14} /> 95% Релевантности</S.MatchBadge>
+                <S.CourseTitle>{course.title}</S.CourseTitle>
+                <S.AIReasonBox>
+                  <S.AIIcon>AI</S.AIIcon>
+                  <p>{course.aiAnalysis || "Анализ данного курса формируется..."}</p>
+                </S.AIReasonBox>
+                <S.MetaGrid>
+                  <div><Clock size={16} /> {course.durationWeeks || 0} недель</div>
+                  <div><DollarSign size={16} /> {course.price}</div>
+                  <div className="rating"><Star size={16} fill="#f59e0b" color="#f59e0b" /> 4.8</div>
+                </S.MetaGrid>
+                <S.ActionRow>
+                  <S.PrimaryButton 
+                    onClick={(e) => { 
+                      e.stopPropagation(); 
+                      navigate(`/details/${course.id}`, { state: { id: course.id } }); 
+                    }}
+                  >
+                    Подробнее
+                  </S.PrimaryButton>
+                  <S.IconButton 
+                    isFavorite={favoriteIds.includes(course.id)} 
+                    onClick={(e) => toggleFavorite(e, course.id)}
+                  >
+                    <Heart size={20} fill={favoriteIds.includes(course.id) ? "currentColor" : "none"} />
+                  </S.IconButton>
+                </S.ActionRow>
+              </S.Card>
+            ))
+          )}
         </main>
       </S.Container>
     </S.PageWrapper>

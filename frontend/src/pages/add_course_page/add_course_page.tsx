@@ -1,19 +1,26 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Send, ShieldAlert } from 'lucide-react'; // Добавил иконку предупреждения
+import { ShieldAlert, Sparkles } from 'lucide-react';
+
+// 🔥 ИСПРАВЛЕНО: импортируем наш настроенный инстанс
+import api from '../../api/axios'; 
 import * as S from './add_course_styles';
 
 export function AddCoursePage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   
+  // 🔥 ИСПРАВЛЕНО: Состояние для предотвращения "вспышки" админки у обычных юзеров
+  const [hasAccess, setHasAccess] = useState(false);
+
   // 1. Проверка прав доступа при загрузке страницы
   useEffect(() => {
     const role = localStorage.getItem('userRole');
     if (role !== 'ADMIN') {
       alert('Доступ запрещен! Только администраторы могут добавлять курсы.');
-      navigate('/dashboard'); // Отправляем обычного юзера обратно
+      navigate('/dashboard'); 
+    } else {
+      setHasAccess(true); // Разрешаем рендер только если это точно ADMIN
     }
   }, [navigate]);
 
@@ -28,24 +35,47 @@ export function AddCoursePage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    
     try {
-      // 2. Отправляем запрос на бэкенд
-      await axios.post('http://localhost:8080/api/courses', formData);
+      // Подготовка чистых данных (убираем лишние пробелы по краям)
+      const courseData = {
+        title: formData.title.trim(),
+        description: formData.description.trim(),
+        price: formData.price.trim(),
+        aiAnalysis: formData.aiAnalysis.trim(),
+        url: formData.url.trim()
+      };
+
+      // 🔥 ИСПРАВЛЕНО: Отправляем запрос через api и относительный путь
+      await api.post('/courses', courseData);
+      
       alert('Курс успешно добавлен в базу данных!');
       navigate('/dashboard'); 
-    } catch (err) {
-      console.error("Ошибка при сохранении:", err);
-      alert('Произошла ошибка при сохранении курса. Проверьте соединение с бэкендом.');
+    } catch (err: any) {
+      console.error("❌ Ошибка при сохранении курса:", err);
+      const serverMessage = err.response?.data?.message || err.response?.data?.error;
+      alert(serverMessage ? `⚠️ Ошибка сервера: ${serverMessage}` : 'Произошла ошибка при сохранении курса. Проверьте бэкенд.');
     } finally {
       setLoading(false);
     }
   };
 
+  // 🔥 ИСПРАВЛЕНО: Пока роль проверяется, показываем заглушку, а не секретную форму
+  if (!hasAccess) {
+    return (
+      <S.PageContainer>
+        <div style={{ textAlign: 'center', padding: '100px', color: '#64748b' }}>
+          <Sparkles className="animate-pulse" size={40} style={{ margin: '0 auto 20px', color: '#e11d48' }} />
+          <p>Проверка прав администратора...</p>
+        </div>
+      </S.PageContainer>
+    );
+  }
+
   return (
     <S.PageContainer>
       <S.FormCard>
         <S.FormHeader>
-          {/* Добавили визуальную пометку, что это панель управления */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#e11d48' }}>
             <ShieldAlert size={24} />
             <span style={{ fontWeight: 'bold', fontSize: '14px', textTransform: 'uppercase' }}>Панель администратора</span>

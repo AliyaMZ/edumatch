@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Mail, Lock, ArrowRight, User } from 'lucide-react'; 
 import { useNavigate, useLocation } from 'react-router-dom';
-import axios from 'axios'; 
+import api from '../../api/axios'; 
+
 import * as A from './auth_styles';
 import vkLogo from '../../assets/vklogo.png';
 
@@ -14,6 +15,7 @@ export function AuthPage() {
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState(''); 
 
+  // Переключение между логин/регистрация из URL-параметров
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const mode = params.get('mode');
@@ -21,56 +23,63 @@ export function AuthPage() {
     else if (mode === 'login') setIsLogin(true);
   }, [location]);
 
-  // --- ОБНОВЛЕННЫЙ ОБРАБОТЧИК ---
+  // --- ОБНОВЛЁННЫЙ ОБРАБОТЧИК ---
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     try {
       if (isLogin) {
-        // --- ЛОГИКА ВХОДА ---
-        const response = await axios.post(`http://localhost:8080/api/users/login`, {
+        // 🔐 ЛОГИКА ВХОДА
+        const response = await api.post('/users/login', {
           email,
           password
         });
 
-        const user = response.data;
+        const userData = response.data.user;
 
         // Сохраняем данные сессии
-        localStorage.setItem('userId', user.id.toString());
-        localStorage.setItem('userRole', user.role);
-        localStorage.setItem('userName', user.username);
-
-        alert(`С возвращением, ${user.username}!`);
+        localStorage.setItem('userId', userData.id.toString());
+        localStorage.setItem('userRole', userData.role);
+        // Защита: если username пустой, запишем часть email до собаки
+        localStorage.setItem('userName', userData.username || email.split('@')[0]);
         
-        // Вход всегда ведет в Личный кабинет (Dashboard)
+        if (response.data.token) {
+          localStorage.setItem('token', response.data.token);
+        }
+
+        alert(`С возвращением, ${userData.username || 'пользователь'}!`);
         navigate('/dashboard'); 
         
       } else {
-        // --- ЛОГИКА РЕГИСТРАЦИИ ---
+        // 📝 ЛОГИКА РЕГИСТРАЦИИ
         const newUser = {
-          username: username,
-          email: email,
+          username: username.trim(),
+          email: email.trim().toLowerCase(), // Приводим к нижнему регистру во избежание конфликтов
           password: password,
           role: 'USER'
         };
 
-        const response = await axios.post('http://localhost:8080/api/users', newUser);
-        const createdUser = response.data;
+        const response = await api.post('/users', newUser);
+        const createdUser = response.data.user;
 
         // Автоматически "логиним" пользователя после регистрации
         localStorage.setItem('userId', createdUser.id.toString());
         localStorage.setItem('userRole', createdUser.role);
-        localStorage.setItem('userName', createdUser.username);
+        // Безопасный фолбек: если бэкенд не вернул username, берем из нашего стейта
+        localStorage.setItem('userName', createdUser.username || username);
 
         alert('Аккаунт создан! Давайте настроим ваш профиль.');
-        
-        // Регистрация ведет на страницу заполнения данных о себе
         navigate('/profile'); 
       }
     } catch (err: any) {
-      console.error("Ошибка:", err);
-      const errorMessage = err.response?.data || 'Ошибка доступа. Проверьте данные.';
-      alert(errorMessage);
+      console.error("❌ Ошибка аутентификации:", err);
+      
+      const errorMessage = 
+        err.response?.data?.error || 
+        err.response?.data?.message ||
+        'Ошибка доступа. Проверьте данные.';
+      
+      alert(`⚠️ ${errorMessage}`);
     }
   };
 

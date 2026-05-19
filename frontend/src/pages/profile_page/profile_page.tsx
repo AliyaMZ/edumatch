@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Sparkles, Clock, DollarSign, Video, FileText, Code, X, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import api from '../../api/axios';
 import * as S from './profile_styles';
 
 export function ProfilePage() {
@@ -22,7 +22,7 @@ export function ProfilePage() {
   const [fetching, setFetching] = useState(true);
 
   // 1. Загрузка текущих данных профиля при монтировании
-  useEffect(() => {
+useEffect(() => {
     if (!userId) {
       navigate('/auth');
       return;
@@ -31,13 +31,17 @@ export function ProfilePage() {
     const loadCurrentProfile = async () => {
       try {
         setFetching(true);
-        const res = await axios.get(`http://localhost:8080/api/users/${userId}`);
+        const res = await api.get(`/users/${userId}`);
         const data = res.data;
         
-        // Заполняем поля данными с сервера
         if (data.username) setUsername(data.username);
         if (data.goal) setGoal(data.goal);
-        if (data.level) setLevel(data.level);
+        
+        // Защита от Java Enum (приводим к нижнему регистру для соответствия стейту)
+        if (data.level) {
+          setLevel(data.level.toLowerCase() as 'beginner' | 'intermediate' | 'advanced');
+        }
+        
         if (data.hoursPerWeek) setHours(data.hoursPerWeek);
         if (data.budget) setBudget(data.budget);
         if (data.preferredFormats) setFormats(data.preferredFormats);
@@ -54,9 +58,14 @@ export function ProfilePage() {
 
   // 2. Логика управления форматами и интересами
   const toggleFormat = (format: string) => {
-    setFormats(prev =>
-      prev.includes(format) ? prev.filter(f => f !== format) : [...prev, format]
-    );
+    setFormats(prev => {
+      if (prev.includes(format)) {
+        // Защита: не позволяем убрать единственный выбранный формат
+        if (prev.length === 1) return prev; 
+        return prev.filter(f => f !== format);
+      }
+      return [...prev, format];
+    });
   };
 
   const addInterest = () => {
@@ -73,26 +82,24 @@ export function ProfilePage() {
 
   // 3. Сохранение обновлений
   const handleSubmitProfile = async () => {
-    // Базовая валидация
     if (!username.trim()) return alert("Пожалуйста, введите ваше имя");
     if (!goal.trim()) return alert("Пожалуйста, укажите вашу цель обучения");
+    if (formats.length === 0) return alert("Пожалуйста, выберите хотя бы один удобный формат обучения");
 
     setLoading(true);
     try {
       const profileData = {
         username: username.trim(),
         goal: goal.trim(),
-        level,
+        level: level.toUpperCase(), // Отправляем обратно в верхнем регистре, если бэкенд ждет Enum
         hoursPerWeek: hours,
         budget,
         preferredFormats: formats,
         interests
       };
 
-      // Отправка на бэкенд
-      await axios.put(`http://localhost:8080/api/users/${userId}/profile`, profileData);
+      await api.put(`/users/${userId}/profile`, profileData);
       
-      // Синхронизация с локальным хранилищем для мгновенного обновления UI в хэдере
       localStorage.setItem('userName', username.trim());
       
       alert('Профиль успешно обновлен!');
@@ -218,10 +225,15 @@ export function ProfilePage() {
             <S.InputRow>
               <input 
                 type="text" 
-                placeholder="Напр: Python, Дизайн..." 
+                placeholder="Напр: Python, Java..." 
                 value={newInterest} 
                 onChange={(e) => setNewInterest(e.target.value)} 
-                onKeyDown={(e) => e.key === 'Enter' && addInterest()} 
+                onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault(); 
+                  addInterest();
+                }
+              }} 
               />
               <button type="button" onClick={addInterest}>Добавить</button>
             </S.InputRow>

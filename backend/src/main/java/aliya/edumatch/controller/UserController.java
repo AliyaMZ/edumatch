@@ -5,7 +5,8 @@ import aliya.edumatch.model.User;
 import aliya.edumatch.model.UserCourse;
 import aliya.edumatch.repository.CourseRepository;
 import aliya.edumatch.repository.UserRepository;
-import aliya.edumatch.repository.UserCourseRepository; // Добавить этот импорт
+import aliya.edumatch.repository.UserCourseRepository;
+import aliya.edumatch.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,7 +17,6 @@ import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/users")
-@CrossOrigin(origins = {"http://localhost:5173", "http://localhost:3000"})
 public class UserController {
 
     @Autowired
@@ -26,64 +26,139 @@ public class UserController {
     private CourseRepository courseRepository;
 
     @Autowired
-    private UserCourseRepository userCourseRepository; // Добавлено для работы с прогрессом
+    private UserCourseRepository userCourseRepository;
 
-    // 1. РЕГИСТРАЦИЯ
+    @Autowired
+    private UserService userService;  // 🔐 НОВОЕ: сервис для безопасной аутентификации
+
+    // =================================================================
+    // 1. РЕГИСТРАЦИЯ (обновлено: хеширование пароля через UserService)
+    // =================================================================
     @PostMapping
-    public ResponseEntity<User> createUser(@RequestBody User user) {
-        if (user.getRole() == null || user.getRole().isEmpty()) {
-            user.setRole("USER");
+    public ResponseEntity<?> createUser(@RequestBody User user) {
+        try {
+            // Базовая валидация
+            if (user.getEmail() == null || user.getEmail().isEmpty()) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Email обязателен"));
+            }
+            if (user.getPassword() == null || user.getPassword().length() < 6) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Пароль должен быть не менее 6 символов"));
+            }
+
+            // Установка значений по умолчанию
+            if (user.getRole() == null || user.getRole().isEmpty()) {
+                user.setRole("USER");
+            }
+            if (user.getFavoriteCourses() == null) {
+                user.setFavoriteCourses(new HashSet<>());
+            }
+
+            // 🔐 ДЕЛЕГИРУЕМ В СЕРВИС: пароль будет захеширован через BCrypt
+            User savedUser = userService.register(user);
+
+            // Не возвращаем хеш пароля в ответе (безопасность!)
+            savedUser.setPassword(null);
+
+            return ResponseEntity.status(201).body(Map.of(
+                    "message", "Пользователь успешно зарегистрирован",
+                    "user", savedUser
+            ));
+
+        } catch (IllegalArgumentException e) {
+            // Например: "Email уже зарегистрирован"
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
-        if (user.getFavoriteCourses() == null) {
-            user.setFavoriteCourses(new java.util.HashSet<>());
-        }
-        User savedUser = userRepository.save(user);
-        return ResponseEntity.ok(savedUser);
     }
 
-    // 2. ЛОГИН
+    // =================================================================
+    // 2. ЛОГИН (обновлено: проверка пароля через BCrypt)
+    // =================================================================
     @PostMapping("/login")
-    public ResponseEntity<?> loginUser(@RequestBody User loginData) {
-        return userRepository.findAll().stream()
-                .filter(user -> user.getEmail().equalsIgnoreCase(loginData.getEmail()))
-                .findFirst()
-                .map(user -> {
-                    if (user.getPassword().equals(loginData.getPassword())) {
-                        return ResponseEntity.ok(user);
-                    } else {
-                        return ResponseEntity.status(401).body("Неверный пароль");
-                    }
-                })
-                .orElse(ResponseEntity.status(404).body("Пользователь не найден"));
+    public ResponseEntity<?> loginUser(@RequestBody Map<String, String> loginRequest) {
+        String email = loginRequest.get("email");
+        String password = loginRequest.get("password");
+
+        // Валидация входных данных
+        if (email == null || email.isEmpty() || password == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Email и пароль обязательны"));
+        }
+
+        try {
+            // 🔐 ДЕЛЕГИРУЕМ В СЕРВИС: пароль проверится через passwordEncoder.matches()
+            User user = userService.login(email, password);
+
+            // Создаём безопасный ответ без пароля
+            Map<String, Object> userData = new HashMap<>();
+            userData.put("id", user.getId());
+            userData.put("email", user.getEmail());
+            userData.put("username", user.getUsername());
+            userData.put("role", user.getRole());
+            userData.put("goal", user.getGoal());
+            userData.put("level", user.getLevel());
+
+            return ResponseEntity.ok(Map.of(
+                    "message", "Вход успешен",
+                    "user", userData
+                    // Позже здесь добавим: "token", jwtToken
+            ));
+
+        } catch (IllegalArgumentException e) {
+            // "Пользователь не найден" или "Неверный пароль"
+            return ResponseEntity.status(401).body(Map.of("error", e.getMessage()));
+        }
     }
 
-    // 3. ОБНОВЛЕНИЕ ПРОФИЛЯ
+    // =================================================================
+    // 3. ОБНОВЛЕНИЕ ПРОФИЛЯ (ИСПРАВЛЕНО: Hibernate Dirty Checking Fix)
+    // =================================================================
     @PutMapping("/{id}/profile")
     @Transactional
     public ResponseEntity<?> updateUserProfile(@PathVariable Long id, @RequestBody User profileData) {
         return userRepository.findById(id).map(user -> {
+            // 1. Обновляем поля
             user.setGoal(profileData.getGoal());
             user.setLevel(profileData.getLevel());
             user.setHoursPerWeek(profileData.getHoursPerWeek());
             user.setBudget(profileData.getBudget());
             user.setPreferredFormats(profileData.getPreferredFormats());
             user.setInterests(profileData.getInterests());
-            // Обновляем имя, если оно пришло
-            if (profileData.getUsername() != null) user.setUsername(profileData.getUsername());
 
-            return ResponseEntity.ok(userRepository.save(user));
+            if (profileData.getUsername() != null) {
+                user.setUsername(profileData.getUsername());
+            }
+
+            // 2. Сохраняем в базу данных
+            User updated = userRepository.save(user);
+
+            // 3. Чтобы Hibernate не занулял пароль в БД, собираем чистый ответ через Map!
+            Map<String, Object> safeUserResponse = new HashMap<>();
+            safeUserResponse.put("id", updated.getId());
+            safeUserResponse.put("email", updated.getEmail());
+            safeUserResponse.put("username", updated.getUsername());
+            safeUserResponse.put("role", updated.getRole());
+            safeUserResponse.put("goal", updated.getGoal());
+            safeUserResponse.put("level", updated.getLevel());
+            safeUserResponse.put("hoursPerWeek", updated.getHoursPerWeek());
+            safeUserResponse.put("budget", updated.getBudget());
+            safeUserResponse.put("preferredFormats", updated.getPreferredFormats());
+            safeUserResponse.put("interests", updated.getInterests());
+
+            return ResponseEntity.ok(Map.of(
+                    "message", "Профиль обновлён",
+                    "user", safeUserResponse
+            ));
         }).orElse(ResponseEntity.notFound().build());
     }
 
-    // 4. ПОЛУЧЕНИЕ ИЗБРАННЫХ КУРСОВ С ПРОГРЕССОМ (Обновлено)
+    // =================================================================
+    // 4. ПОЛУЧЕНИЕ ИЗБРАННЫХ КУРСОВ С ПРОГРЕССОМ (оставляем как есть)
+    // =================================================================
     @GetMapping("/{id}/favorites")
     @Transactional(readOnly = true)
     public ResponseEntity<?> getUserFavorites(@PathVariable Long id) {
         return userRepository.findById(id).map(user -> {
-            // Загружаем все записи прогресса пользователя за один раз
             List<UserCourse> progressList = userCourseRepository.findByUserId(id);
 
-            // Превращаем Set<Course> в список объектов с прогрессом
             List<Map<String, Object>> response = user.getFavoriteCourses().stream().map(course -> {
                 Map<String, Object> courseMap = new HashMap<>();
                 courseMap.put("id", course.getId());
@@ -93,7 +168,6 @@ public class UserController {
                 courseMap.put("aiAnalysis", course.getAiAnalysis());
                 courseMap.put("url", course.getUrl());
 
-                // Ищем прогресс для конкретного курса в списке
                 UserCourse progress = progressList.stream()
                         .filter(p -> p.getCourse().getId().equals(course.getId()))
                         .findFirst()
@@ -109,7 +183,9 @@ public class UserController {
         }).orElse(ResponseEntity.notFound().build());
     }
 
-    // 5. ОБНОВЛЕНИЕ ПРОГРЕССА (Новый метод)
+    // =================================================================
+    // 5. ОБНОВЛЕНИЕ ПРОГРЕССА (оставляем как есть)
+    // =================================================================
     @PutMapping("/{userId}/courses/{courseId}/progress")
     @Transactional
     public ResponseEntity<?> updateCourseProgress(
@@ -119,7 +195,6 @@ public class UserController {
 
         UserCourse userCourse = userCourseRepository.findByUserIdAndCourseId(userId, courseId)
                 .orElseGet(() -> {
-                    // Если записи о прогрессе нет, создаем новую связь
                     User user = userRepository.findById(userId).orElseThrow();
                     Course course = courseRepository.findById(courseId).orElseThrow();
                     UserCourse uc = new UserCourse();
@@ -136,10 +211,12 @@ public class UserController {
         }
 
         userCourseRepository.save(userCourse);
-        return ResponseEntity.ok("Прогресс обновлен");
+        return ResponseEntity.ok(Map.of("message", "Прогресс обновлён"));
     }
 
-    // 6. ДОБАВЛЕНИЕ В ИЗБРАННОЕ
+    // =================================================================
+    // 6. ДОБАВЛЕНИЕ В ИЗБРАННОЕ (оставляем как есть)
+    // =================================================================
     @PostMapping("/{userId}/favorites/{courseId}")
     @Transactional
     public ResponseEntity<?> addCourseToFavorites(@PathVariable Long userId, @PathVariable Long courseId) {
@@ -150,10 +227,13 @@ public class UserController {
 
         user.getFavoriteCourses().add(course);
         userRepository.save(user);
-        return ResponseEntity.ok("Курс добавлен в избранное");
+
+        return ResponseEntity.ok(Map.of("message", "Курс добавлен в избранное"));
     }
 
-    // 7. УДАЛЕНИЕ ИЗ ИЗБРАННОГО
+    // =================================================================
+    // 7. УДАЛЕНИЕ ИЗ ИЗБРАННОГО (оставляем как есть)
+    // =================================================================
     @DeleteMapping("/{userId}/favorites/{courseId}")
     @Transactional
     public ResponseEntity<?> removeCourseFromFavorites(@PathVariable Long userId, @PathVariable Long courseId) {
@@ -164,15 +244,21 @@ public class UserController {
 
         if (removed) {
             userRepository.save(user);
-            return ResponseEntity.ok("Курс удален из избранного");
+            return ResponseEntity.ok(Map.of("message", "Курс удалён из избранного"));
         }
-        return ResponseEntity.badRequest().body("Курс не найден в избранном");
+        return ResponseEntity.badRequest().body(Map.of("error", "Курс не найден в избранном"));
     }
 
+    // =================================================================
+    // 8. ПОЛУЧЕНИЕ ПОЛЬЗОВАТЕЛЯ ПО ID (оставляем как есть)
+    // =================================================================
     @GetMapping("/{id}")
     public ResponseEntity<User> getUser(@PathVariable Long id) {
         return userRepository.findById(id)
-                .map(ResponseEntity::ok)
+                .map(user -> {
+                    user.setPassword(null); // Не возвращаем пароль
+                    return ResponseEntity.ok(user);
+                })
                 .orElse(ResponseEntity.notFound().build());
     }
 }

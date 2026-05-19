@@ -2,6 +2,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import HtmlWebpackPlugin from 'html-webpack-plugin';
 import CopyPlugin from "copy-webpack-plugin";
+import webpack from 'webpack';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -15,9 +16,9 @@ export default {
     publicPath: '/', 
     clean: true,
   },
+  
   devServer: {
     static: {
-      // ИЗМЕНЕНИЕ: указываем серверу смотреть и в dist, и в public
       directory: path.join(__dirname, 'public'), 
     },
     historyApiFallback: true, 
@@ -27,30 +28,46 @@ export default {
     devMiddleware: {
       publicPath: '/', 
     },
+    
+    // 🔥 Исправленный синтаксис proxy для Webpack Dev Server v5
+    proxy: [
+      {
+        context: ['/api'],
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        secure: false,
+        headers: {
+          'Connection': 'keep-alive',
+        },
+      },
+    ],
   },
 
   plugins: [
     new HtmlWebpackPlugin({
       template: path.resolve(__dirname, 'src/index.html'),
       filename: 'index.html',
-      // Оставляем это для основной иконки
       favicon: path.resolve(__dirname, 'public/favicon.ico') 
     }),
     
-    // ДОБАВЛЕНО: Копируем остальные иконки и манифест
     new CopyPlugin({
       patterns: [
         { 
           from: path.resolve(__dirname, "public"), 
           to: path.resolve(__dirname, "dist"),
           globOptions: {
-            // Игнорируем favicon.ico, так как его уже обрабатывает HtmlWebpackPlugin
             ignore: ["**/favicon.ico"], 
           },
         },
       ],
     }),
+
+    // 👈 2. ДОБАВЬ ЭТОТ ПЛАГИН:
+    new webpack.DefinePlugin({
+      'process.env': JSON.stringify({}) // Создает пустой объект process.env в браузере, чтобы код не падал
+    })
   ],
+  
   module: {
     rules: [
       {
@@ -81,6 +98,7 @@ export default {
       },
     ],
   },
+  
   resolve: {
     extensions: ['.js', '.jsx', '.ts', '.tsx'],
   },

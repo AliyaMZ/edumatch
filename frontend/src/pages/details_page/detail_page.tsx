@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
-import axios from 'axios';
+import api from '../../api/axios'; 
+
 import { 
-  Clock, DollarSign, Video, Heart, ExternalLink, 
+  Clock, Video, Heart, ExternalLink, 
   ChevronDown, Brain, Sparkles, FileText, Code, Globe,
   PlusCircle, CheckCircle2
 } from 'lucide-react';
@@ -38,23 +39,27 @@ export function DetailPage() {
 
   const [course, setCourse] = useState<Course | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null); // Добавили стейт ошибки
   const [expandedModule, setExpandedModule] = useState<number | null>(0);
 
-  const fetchData = async () => {
+  // 🔥 ИСПРАВЛЕНО: обернуто в useCallback, убран полный перебор массива курсов
+  const fetchData = useCallback(async () => {
     if (!courseId) {
       navigate('/results');
       return;
     }
     try {
       setLoading(true);
-      // Сначала получаем данные курса, затем проверяем статус прогресса, если он в избранном
-      const courseRes = await axios.get(`http://localhost:8080/api/courses`);
-      const found = courseRes.data.find((c: Course) => c.id === Number(courseId));
+      setError(null);
+
+      // 🎯 ОПТИМИЗАЦИЯ: запрашиваем конкретный курс по ID с бэкенда через наш api
+      const courseRes = await api.get(`/courses/${courseId}`);
+      const found = courseRes.data;
       
       if (found && currentUserId) {
         try {
-          // Пытаемся получить актуальный прогресс именно для этого пользователя
-          const favRes = await axios.get(`http://localhost:8080/api/users/${currentUserId}/favorites`);
+          // Получаем актуальный прогресс пользователя для этого курса
+          const favRes = await api.get(`/users/${currentUserId}/favorites`);
           const userCourseData = favRes.data.find((c: any) => c.id === Number(courseId));
           if (userCourseData) {
             found.progress = userCourseData.progress;
@@ -66,16 +71,17 @@ export function DetailPage() {
       }
       
       setCourse(found);
-    } catch (err) {
-      console.error("Ошибка загрузки:", err);
+    } catch (err: any) {
+      console.error("❌ Ошибка загрузки деталей курса:", err);
+      setError("Не удалось загрузить информацию о курсе.");
     } finally {
       setLoading(false);
     }
-  };
+  }, [courseId, currentUserId, navigate]);
 
   useEffect(() => {
     fetchData();
-  }, [courseId, navigate]);
+  }, [fetchData]);
 
   const toggleFavorite = async () => {
     if (!currentUserId || !courseId) return;
@@ -84,14 +90,15 @@ export function DetailPage() {
 
     try {
       if (isFavorite) {
-        await axios.delete(`http://localhost:8080/api/users/${currentUserId}/favorites/${courseId}`);
+        // 🔥 ИСПРАВЛЕНО: пути изменены на относительные
+        await api.delete(`/users/${currentUserId}/favorites/${courseId}`);
       } else {
-        await axios.post(`http://localhost:8080/api/users/${currentUserId}/favorites/${courseId}`);
-        fetchData(); // Обновляем, чтобы подтянуть дефолтный прогресс
+        await api.post(`/users/${currentUserId}/favorites/${courseId}`);
+        fetchData(); // Подтягиваем дефолтный прогресс с сервера
       }
     } catch (err) {
       console.error("Ошибка обновления избранного:", err);
-      dispatch(toggleFavoriteLocal(Number(courseId)));
+      dispatch(toggleFavoriteLocal(Number(courseId))); // Откат при сбое
     }
   };
 
@@ -102,26 +109,27 @@ export function DetailPage() {
     const newProgress = Math.min(currentProgress + 10, 100);
     const newStatus = newProgress === 100 ? 'completed' : 'in_progress';
 
-    // Оптимистичное обновление
+    // Оптимистичное обновление UI
     setCourse({ ...course, progress: newProgress, status: newStatus });
 
     try {
-      await axios.put(`http://localhost:8080/api/users/${currentUserId}/courses/${course.id}/progress`, {
+      // 🔥 ИСПРАВЛЕНО: пути изменены на относительные через api
+      await api.put(`/users/${currentUserId}/courses/${course.id}/progress`, {
         progress: newProgress,
         status: newStatus
       });
     } catch (err) {
       console.error("Ошибка обновления прогресса:", err);
-      fetchData(); // Откат к данным сервера
+      fetchData(); // Откат к серверным данным в случае ошибки
     }
   };
 
   const getFormatIcon = (format: string) => {
     switch (format) {
-      case 'Видео': return <Video size={20} />;
-      case 'Текст': return <FileText size={20} />;
-      case 'Практика': return <Code size={20} />;
-      default: return <Globe size={20} />;
+      case 'Видео': return <Video size={20} color="#4338ca" />;
+      case 'Текст': return <FileText size={20} color="#4338ca" />;
+      case 'Практика': return <Code size={20} color="#4338ca" />;
+      default: return <Globe size={20} color="#4338ca" />;
     }
   };
 
@@ -130,7 +138,8 @@ export function DetailPage() {
     { title: 'Модуль 2: Глубокое погружение', lessons: ['Продвинутые паттерны', 'Оптимизация производительности', 'Тестирование'] }
   ];
 
-  if (loading) return <S.PageWrapper><div style={{ textAlign: 'center', padding: '100px' }}>Загрузка...</div></S.PageWrapper>;
+  if (loading) return <S.PageWrapper><div style={{ textAlign: 'center', padding: '100px', color: '#4338ca' }}>Загрузка деталей курса...</div></S.PageWrapper>;
+  if (error) return <S.PageWrapper><div style={{ textAlign: 'center', padding: '100px', color: '#ef4444' }}>⚠️ {error}</div></S.PageWrapper>;
   if (!course) return <S.PageWrapper><div style={{ textAlign: 'center', padding: '100px' }}>Курс не найден</div></S.PageWrapper>;
 
   return (
@@ -157,14 +166,14 @@ export function DetailPage() {
                   <Clock size={20} color="#4338ca" />
                   <div>
                     <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Длительность</div>
-                    <div style={{ fontWeight: 600 }}>{course.durationWeeks} недель</div>
+                    <div style={{ fontWeight: 600 }}>{course.durationWeeks || 4} недель</div>
                   </div>
                 </S.CharItem>
                 <S.CharItem>
                   {getFormatIcon(course.format)}
                   <div>
                     <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Формат</div>
-                    <div style={{ fontWeight: 600 }}>{course.format || 'Смешанный'}</div>
+                    <div style={{ fontWeight: 600 }}>{course.format || 'Онлайн-курс'}</div>
                   </div>
                 </S.CharItem>
               </S.CharacteristicGrid>
@@ -246,7 +255,7 @@ export function DetailPage() {
                 <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>AI Анализ</h3>
               </div>
               <p style={{ fontSize: '0.9rem', color: '#1e293b', lineHeight: 1.6, opacity: 0.9 }}>
-                {course.aiAnalysis}
+                {course.aiAnalysis || "Анализ соответствия данному курсу обрабатывается алгоритмом."}
               </p>
             </S.AIAnalysisCard>
           </S.Sidebar>

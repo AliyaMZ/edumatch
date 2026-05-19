@@ -7,6 +7,10 @@ import java.util.Optional;
 
 @Repository
 public interface UserRepository extends JpaRepository<User, Long> {
-    // Этот метод поможет нам находить пользователя по почте при логине
+
+    // 1. Для логина: найти пользователя по email
     Optional<User> findByEmail(String email);
+
+    // 2. Для регистрации: проверить, свободен ли email 🔥 НОВОЕ
+    boolean existsByEmail(String email);
 }
