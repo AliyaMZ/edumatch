@@ -5,6 +5,7 @@ import aliya.edumatch.repository.CourseRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -29,6 +30,7 @@ public class CourseController {
                 .filter(c -> search == null || c.getTitle().toLowerCase().contains(search.toLowerCase()))
                 .filter(c -> {
                     if (maxPrice == null) return true;
+                    if (c.getPrice() == null) return true; // ✨ ОПТИМИЗАЦИЯ: защита от NullPointerException
                     try {
                         // Очистка строки цены от лишних символов (₽, $, пробелы) для корректного сравнения
                         String priceStr = c.getPrice().replaceAll("[^0-9]", "");
@@ -40,6 +42,7 @@ public class CourseController {
                 .collect(Collectors.toList());
     }
 
+    // 2. ПОЛУЧИТЬ КУРС ПО ID
     @GetMapping("/{id}")
     public ResponseEntity<Course> getCourseById(@PathVariable Long id) {
         return courseRepository.findById(id)
@@ -47,13 +50,16 @@ public class CourseController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    // 3. СОЗДАНИЕ КУРСА
     @PostMapping
+    @PreAuthorize("hasAuthority('ADMIN')") // Защищено: только для ADMIN
     public Course createCourse(@RequestBody Course course) {
         return courseRepository.save(course);
     }
 
     // 4. УДАЛЕНИЕ КУРСА ИЗ СИСТЕМЫ
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAuthority('ADMIN')") // Защищено: только для ADMIN
     public ResponseEntity<?> deleteCourse(@PathVariable Long id) {
         return courseRepository.findById(id).map(course -> {
             try {

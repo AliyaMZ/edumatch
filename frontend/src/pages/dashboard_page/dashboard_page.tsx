@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
-import axios from 'axios';
+import api from '../../api/axios'; 
+
 import { 
   User as UserIcon, BookMarked, Sparkles, Clock, DollarSign, Video, 
   Target, Lightbulb, Star, TrendingUp, Trash2, Briefcase, Settings, PlusCircle
@@ -33,6 +34,11 @@ interface UserProfile {
 }
 
 export function DashboardPage() {
+  const levelTranslation: Record<string, string> = {
+    'beginner': 'Новичок ',
+    'intermediate': 'Средний ',
+    'advanced': 'Профи '
+  };
   const navigate = useNavigate();
   const dispatch = useDispatch<AppDispatch>();
   
@@ -46,7 +52,8 @@ export function DashboardPage() {
 
   const currentUserId = localStorage.getItem('userId');
 
-  const fetchData = async (silent = false) => {
+  // Перенос в useCallback, чтобы не пересоздавать функцию при рендерах
+  const fetchData = React.useCallback(async (silent = false) => {
     if (!currentUserId) {
       navigate('/auth');
       return;
@@ -54,31 +61,32 @@ export function DashboardPage() {
 
     try {
       if (!silent) setLoading(true);
+      
+      // 🔥 ИСПРАВЛЕНО: Запросы идут через инстанс api и относительные пути
       const [profileRes, favCoursesRes] = await Promise.all([
-        axios.get(`http://localhost:8080/api/users/${currentUserId}`),
-        axios.get(`http://localhost:8080/api/users/${currentUserId}/favorites`)
+        api.get(`/users/${currentUserId}`),
+        api.get(`/users/${currentUserId}/favorites`)
       ]);
 
       setProfile(profileRes.data);
       setAllCourses(favCoursesRes.data); 
       setError(null);
     } catch (err: any) {
-      console.error("Ошибка API:", err);
-      if (err.response?.status === 404) {
-        localStorage.removeItem('userId');
+      console.error("❌ Ошибка API на Дашборде:", err);
+      if (err.response?.status === 401 || err.response?.status === 404) {
+        localStorage.clear(); // Безопаснее очистить всё, если сессия протухла
         navigate('/auth');
       }
-      setError("Не удалось загрузить данные.");
+      setError("Не удалось загрузить данные личного кабинета.");
     } finally {
       if (!silent) setLoading(false);
     }
-  };
+  }, [currentUserId, navigate]);
 
   useEffect(() => {
     fetchData();
-  }, [currentUserId]);
+  }, [fetchData]);
 
-  // Сортировка по ID гарантирует, что курсы не будут менять порядок при обновлении
   const favoriteCourses = useMemo(() => {
     return [...allCourses]
       .filter(course => favoriteIds.includes(course.id))
@@ -89,24 +97,22 @@ export function DashboardPage() {
     const newProgress = Math.min(currentProgress + 10, 100);
     const newStatus = newProgress === 100 ? 'completed' : 'in_progress';
 
-    // 1. Оптимистично обновляем локальный стейт, чтобы UI среагировал мгновенно
+    // 1. Оптимистичное обновление UI
     setAllCourses(prev => prev.map(c => 
       c.id === courseId ? { ...c, progress: newProgress, status: newStatus } : c
     ));
 
     try {
-      // 2. Отправляем запрос на бэкенд
-      await axios.put(`http://localhost:8080/api/users/${currentUserId}/courses/${courseId}/progress`, {
+      // 🔥 ИСПРАВЛЕНО: Путь изменен на относительный через api
+      await api.put(`/users/${currentUserId}/courses/${courseId}/progress`, {
         progress: newProgress,
         status: newStatus
       });
-      // 3. Синхронизируем данные в фоне без показа лоадера
       fetchData(true);
     } catch (err) {
-      console.error("Ошибка при обновлении прогресса:", err);
-      // Если произошла ошибка, откатываем данные к серверным
+      console.error("Ошибка при сохранении прогресса:", err);
       fetchData(true);
-      alert("Не удалось сохранить прогресс");
+      alert("Не удалось сохранить прогресс на сервере");
     }
   };
 
@@ -115,15 +121,14 @@ export function DashboardPage() {
     if (window.confirm("Удалить этот курс из избранного?")) {
       const originalCourses = [...allCourses];
       
-      // Удаляем локально для мгновенного фидбека
       setAllCourses(prev => prev.filter(c => c.id !== courseId));
       dispatch(toggleFavoriteLocal(courseId));
 
       try {
-        await axios.delete(`http://localhost:8080/api/users/${currentUserId}/favorites/${courseId}`);
+        // 🔥 ИСПРАВЛЕНО: Путь изменен на относительный через api
+        await api.delete(`/users/${currentUserId}/favorites/${courseId}`);
       } catch (err) {
         console.error("Ошибка при удалении:", err);
-        // Откат при ошибке
         setAllCourses(originalCourses);
         dispatch(toggleFavoriteLocal(courseId));
         alert("Не удалось удалить курс");
@@ -138,7 +143,7 @@ export function DashboardPage() {
       <S.DashboardContainer>
         <div style={{ textAlign: 'center', padding: '100px', color: '#4338ca', fontWeight: 600 }}>
           <Sparkles className="animate-pulse" style={{ margin: '0 auto 20px' }} size={40} />
-          <p>Синхронизация данных...</p>
+          <p>Синхронизация данных профиля...</p>
         </div>
       </S.DashboardContainer>
     );
@@ -147,6 +152,8 @@ export function DashboardPage() {
   return (
     <S.DashboardContainer>
       <S.MaxWidthWrapper>
+        {error && <div style={{ color: '#ef4444', marginBottom: '16px', fontWeight: 500 }}>⚠️ {error}</div>}
+        
         <S.HeaderSection>
           <div className="welcome-tag">С возвращением, {profile?.username || 'Пользователь'}! 👋</div>
           <h1>Личный кабинет</h1>
@@ -210,7 +217,13 @@ export function DashboardPage() {
               <S.GridTwoCols>
                 <S.InfoBlock>
                   <label>Уровень подготовки</label>
-                  <S.DataTag><TrendingUp size={16} /> {profile.level || "Не указан"}</S.DataTag>
+                  <S.DataTag>
+                    <TrendingUp size={16} />{' '}
+                      {profile.level 
+                      ? (levelTranslation[profile.level.toLowerCase()] || profile.level) 
+                      : "Не указан"
+                      }
+                  </S.DataTag>
                 </S.InfoBlock>
                 <S.InfoBlock>
                   <label>Выделенный бюджет</label>
