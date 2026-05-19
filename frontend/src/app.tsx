@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import { Global, css } from '@emotion/react';
 import { useDispatch } from 'react-redux';
+import { Toaster } from 'react-hot-toast'; // 1. Импорт Toaster
 import { AppDispatch } from './store';
 import { fetchFavorites } from './store/favoritesSlice';
 
@@ -36,9 +37,8 @@ const globalStyles = css`
 
 const App = () => {
   const location = useLocation();
-  const dispatch = useDispatch<AppDispatch>(); // Инициализация диспетчера
+  const dispatch = useDispatch<AppDispatch>();
 
-  // ИЗМЕНЕНИЕ: Загрузка избранного из БД при первом рендере приложения
   useEffect(() => {
     const userId = localStorage.getItem('userId');
     if (userId) {
@@ -52,6 +52,19 @@ const App = () => {
     <>
       <Global styles={globalStyles} />
       <ScrollToTop />
+      
+      {/* 2. Добавляем Toaster в дерево компонентов */}
+      <Toaster 
+        position="top-right"
+        toastOptions={{
+          duration: 3000,
+          style: {
+            background: '#333',
+            color: '#fff',
+            fontSize: '14px',
+          },
+        }}
+      />
       
       {!hideHeaderPaths.includes(location.pathname) && <Header />}
       

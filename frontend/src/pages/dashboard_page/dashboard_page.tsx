@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import api from '../../api/axios'; 
+import { toast } from 'react-hot-toast';
 
 import { 
   User as UserIcon, BookMarked, Sparkles, Clock, DollarSign, Video, 
@@ -9,7 +10,7 @@ import {
 } from 'lucide-react';
 
 import { RootState, AppDispatch } from '../../store'; 
-import { toggleFavoriteLocal } from '../../store/favoritesSlice'; 
+import { toggleFavoriteLocal, fetchFavorites, setFavorites} from '../../store/favoritesSlice'; 
 import * as S from './dashboard_styles';
 
 interface Course {
@@ -54,38 +55,42 @@ export function DashboardPage() {
 
   // Перенос в useCallback, чтобы не пересоздавать функцию при рендерах
   const fetchData = React.useCallback(async (silent = false) => {
-    if (!currentUserId) {
-      navigate('/auth');
-      return;
-    }
+  if (!currentUserId) return;
 
-    try {
-      if (!silent) setLoading(true);
-      
-      // 🔥 ИСПРАВЛЕНО: Запросы идут через инстанс api и относительные пути
-      const [profileRes, favCoursesRes] = await Promise.all([
-        api.get(`/users/${currentUserId}`),
-        api.get(`/users/${currentUserId}/favorites`)
-      ]);
+  try {
+    if (!silent) setLoading(true);
+    
+    // Делаем запросы отдельно, чтобы увидеть, какой именно падает
+    const profileRes = await api.get(`/users/${currentUserId}`);
+    console.log("Данные профиля:", profileRes.data);
+    
+    const favCoursesRes = await api.get(`/users/${currentUserId}/favorites`);
+    console.log("Данные курсов:", favCoursesRes.data);
 
-      setProfile(profileRes.data);
-      setAllCourses(favCoursesRes.data); 
-      setError(null);
-    } catch (err: any) {
-      console.error("❌ Ошибка API на Дашборде:", err);
-      if (err.response?.status === 401 || err.response?.status === 404) {
-        localStorage.clear(); // Безопаснее очистить всё, если сессия протухла
-        navigate('/auth');
-      }
-      setError("Не удалось загрузить данные личного кабинета.");
-    } finally {
-      if (!silent) setLoading(false);
-    }
-  }, [currentUserId, navigate]);
+    setProfile(profileRes.data);
+    setAllCourses(favCoursesRes.data); 
+    
+    const ids = favCoursesRes.data.map((c: any) => c.id);
+    dispatch(setFavorites(ids)); 
+    
+    setError(null);
+  } catch (err: any) {
+    console.error("❌ Ошибка при загрузке:", err);
+    setError("Не удалось загрузить данные профиля.");
+  } finally {
+    if (!silent) setLoading(false);
+  }
+}, [currentUserId, dispatch]);
 
-  useEffect(() => {
+useEffect(() => {
+  // Добавим явную проверку, что ID существует, прежде чем вызывать загрузку
+  if (currentUserId) {
     fetchData();
-  }, [fetchData]);
+  } else {
+    // Если ID нет, пробуем перенаправить или просто ждем
+    navigate('/auth');
+  }
+}, [currentUserId, fetchData]);
 
   const favoriteCourses = useMemo(() => {
     return [...allCourses]
@@ -97,42 +102,40 @@ export function DashboardPage() {
     const newProgress = Math.min(currentProgress + 10, 100);
     const newStatus = newProgress === 100 ? 'completed' : 'in_progress';
 
-    // 1. Оптимистичное обновление UI
     setAllCourses(prev => prev.map(c => 
       c.id === courseId ? { ...c, progress: newProgress, status: newStatus } : c
     ));
 
     try {
-      // 🔥 ИСПРАВЛЕНО: Путь изменен на относительный через api
       await api.put(`/users/${currentUserId}/courses/${courseId}/progress`, {
         progress: newProgress,
         status: newStatus
       });
-      fetchData(true);
+      
+      toast.success("Прогресс обновлен!"); // Заменено
+      await fetchData(true); 
     } catch (err) {
-      console.error("Ошибка при сохранении прогресса:", err);
+      console.error("Ошибка при сохранении:", err);
+      toast.error("Не удалось сохранить прогресс"); // Заменено
       fetchData(true);
-      alert("Не удалось сохранить прогресс на сервере");
     }
   };
 
   const handleDelete = async (courseId: number) => {
-    if (!currentUserId) return;
-    if (window.confirm("Удалить этот курс из избранного?")) {
-      const originalCourses = [...allCourses];
-      
-      setAllCourses(prev => prev.filter(c => c.id !== courseId));
-      dispatch(toggleFavoriteLocal(courseId));
-
-      try {
-        // 🔥 ИСПРАВЛЕНО: Путь изменен на относительный через api
+    // Внимание: window.confirm оставить можно, он нужен для подтверждения действия, 
+    // но если хочешь полностью избавиться от стандартных окон, используй библиотеку диалогов.
+    // Пока заменим только сообщение об ошибке.
+    if (!currentUserId || !window.confirm("Удалить этот курс из избранного?")) return;
+    
+    try {
         await api.delete(`/users/${currentUserId}/favorites/${courseId}`);
-      } catch (err) {
-        console.error("Ошибка при удалении:", err);
-        setAllCourses(originalCourses);
+        
+        setAllCourses(prev => prev.filter(c => c.id !== courseId));
         dispatch(toggleFavoriteLocal(courseId));
-        alert("Не удалось удалить курс");
-      }
+        toast.success("Курс удален из избранного"); // Заменено
+    } catch (err) {
+        console.error("Ошибка при удалении на сервере:", err);
+        toast.error("Не удалось удалить курс"); // Заменено
     }
   };
 
@@ -178,7 +181,7 @@ export function DashboardPage() {
               <S.StatCard variant="blue">
                 <div className="icon-wrapper"><Target size={24} /></div>
                 <div className="info">
-                  <div className="value">{favoriteIds.length}</div>
+                  <div className="value">{favoriteCourses.length}</div>
                   <div className="label">Курсов сохранено</div>
                 </div>
               </S.StatCard>

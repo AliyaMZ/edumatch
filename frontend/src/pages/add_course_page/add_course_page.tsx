@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ShieldAlert, Sparkles } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 
 // 🔥 ИСПРАВЛЕНО: импортируем наш настроенный инстанс
 import api from '../../api/axios'; 
@@ -9,18 +10,16 @@ import * as S from './add_course_styles';
 export function AddCoursePage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  
-  // 🔥 ИСПРАВЛЕНО: Состояние для предотвращения "вспышки" админки у обычных юзеров
   const [hasAccess, setHasAccess] = useState(false);
 
-  // 1. Проверка прав доступа при загрузке страницы
   useEffect(() => {
     const role = localStorage.getItem('userRole');
     if (role !== 'ADMIN') {
-      alert('Доступ запрещен! Только администраторы могут добавлять курсы.');
+      // 2. Заменяем alert на toast.error
+      toast.error('Доступ запрещен! Только для администраторов.');
       navigate('/dashboard'); 
     } else {
-      setHasAccess(true); // Разрешаем рендер только если это точно ADMIN
+      setHasAccess(true);
     }
   }, [navigate]);
 
@@ -37,7 +36,6 @@ export function AddCoursePage() {
     setLoading(true);
     
     try {
-      // Подготовка чистых данных (убираем лишние пробелы по краям)
       const courseData = {
         title: formData.title.trim(),
         description: formData.description.trim(),
@@ -46,15 +44,17 @@ export function AddCoursePage() {
         url: formData.url.trim()
       };
 
-      // 🔥 ИСПРАВЛЕНО: Отправляем запрос через api и относительный путь
       await api.post('/courses', courseData);
       
-      alert('Курс успешно добавлен в базу данных!');
+      // 3. Заменяем успех на toast.success
+      toast.success('Курс успешно добавлен!');
       navigate('/dashboard'); 
     } catch (err: any) {
       console.error("❌ Ошибка при сохранении курса:", err);
       const serverMessage = err.response?.data?.message || err.response?.data?.error;
-      alert(serverMessage ? `⚠️ Ошибка сервера: ${serverMessage}` : 'Произошла ошибка при сохранении курса. Проверьте бэкенд.');
+      
+      // 4. Заменяем ошибку на toast.error
+      toast.error(serverMessage ? `Ошибка: ${serverMessage}` : 'Произошла ошибка при сохранении');
     } finally {
       setLoading(false);
     }
