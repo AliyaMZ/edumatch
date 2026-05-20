@@ -1,7 +1,9 @@
 package aliya.edumatch.controller;
 
 import aliya.edumatch.model.Course;
+import aliya.edumatch.model.UserCourse;
 import aliya.edumatch.repository.CourseRepository;
+import aliya.edumatch.repository.UserCourseRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -17,6 +19,9 @@ public class CourseController {
 
     @Autowired
     private CourseRepository courseRepository;
+
+    @Autowired
+    private UserCourseRepository userCourseRepository;
 
     // 1. ПОЛУЧИТЬ ВСЕ КУРСЫ (С фильтрами)
     @GetMapping
@@ -70,5 +75,38 @@ public class CourseController {
                 return ResponseEntity.status(409).body("Нельзя удалить курс, который находится в избранном у пользователей");
             }
         }).orElse(ResponseEntity.notFound().build());
+    }
+
+    // 🔥 ДОБАВИТЬ ЭТОТ МЕТОД В CourseController
+    // 🔥 ОБНОВЛЕННЫЙ МЕТОД: Безопасная работа с дублями
+    @GetMapping("/{courseId}/user/{userId}")
+    public ResponseEntity<Course> getCourseDetailsForUser(@PathVariable Long courseId, @PathVariable Long userId) {
+        System.out.println("DEBUG: Запрос деталей курса " + courseId + " для юзера " + userId);
+
+        return courseRepository.findById(courseId)
+                .map(course -> {
+                    try {
+                        // Используем метод, который возвращает List, чтобы избежать ошибки "non-unique result"
+                        List<UserCourse> records = userCourseRepository.findByUserIdAndCourseIdList(userId, courseId);
+
+                        if (!records.isEmpty()) {
+                            // Берем первую запись, если их вдруг оказалось несколько
+                            UserCourse uc = records.get(0);
+                            String analysis = uc.getAiAnalysis();
+
+                            if (analysis != null && !analysis.isEmpty()) {
+                                course.setAiAnalysis(analysis);
+                                System.out.println("DEBUG: Анализ ИИ успешно прикреплен к курсу. (Запись ID: " + uc.getId() + ")");
+                            }
+                        } else {
+                            System.out.println("DEBUG: Запись UserCourse не найдена для пользователя " + userId);
+                        }
+                    } catch (Exception e) {
+                        System.err.println("DEBUG: Ошибка при обработке рекомендаций: " + e.getMessage());
+                    }
+
+                    return ResponseEntity.ok(course);
+                })
+                .orElse(ResponseEntity.notFound().build());
     }
 }

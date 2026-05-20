@@ -1,14 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { Mail, Lock, ArrowRight, User } from 'lucide-react'; 
 import { useNavigate, useLocation } from 'react-router-dom';
-import api from '../../api/axios'; 
+import { Mail, Lock, ArrowRight, User } from 'lucide-react'; 
 import { toast } from 'react-hot-toast';
+
+import api from '../../api/axios'; 
 import * as A from './auth_styles';
 import vkLogo from '../../assets/vklogo.png';
 
+
+interface AuthResponse {
+  token?: string;
+  userId?: number;
+  role?: string;
+  username?: string; // На случай, если бэкенд возвращает подтвержденное имя
+}
+
 export function AuthPage() {
   const [isLogin, setIsLogin] = useState(true);
-  const [isLoading, setIsLoading] = useState(false); // Добавлено состояние загрузки
+  const [isLoading, setIsLoading] = useState(false); 
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -25,7 +34,7 @@ export function AuthPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true); // Блокируем кнопку
+    setIsLoading(true); 
     
     const safeEmail = (email || '').trim().toLowerCase();
     const safePassword = password || '';
@@ -36,20 +45,28 @@ export function AuthPage() {
       ['token', 'userId', 'userRole', 'userName'].forEach(key => localStorage.removeItem(key));
 
       if (isLogin) {
+        // Отправляем запрос на авторизацию
         const response = await api.post('/auth/login', {
           email: safeEmail,
           password: safePassword
         });
 
-        const data = response.data as { token?: string; userId?: number; role?: string };
+        const data = response.data as AuthResponse;
 
+        // Сохраняем сессию в локальное хранилище
         localStorage.setItem('token', data.token || '');
-        localStorage.setItem('userId', (data.userId?.toString()) || '');
+        localStorage.setItem('userId', data.userId?.toString() || '');
         localStorage.setItem('userRole', data.role || 'USER');
-        localStorage.setItem('userName', safeEmail.split('@')[0] || 'User');
+        localStorage.setItem('userName', data.username || safeEmail.split('@')[0] || 'User');
 
         toast.success('Успешный вход!');
-        navigate('/dashboard'); 
+        
+        // 🔥 УЛУЧШЕНИЕ: Если вошел админ — сразу отправляем его в админку, а не на общий дашборд
+        if (data.role === 'ADMIN') {
+          navigate('/add-course'); // или твой общий роут админ-панели
+        } else {
+          navigate('/dashboard'); 
+        }
       } else {
         const registerData = {
           username: safeUsername,
@@ -59,22 +76,25 @@ export function AuthPage() {
 
         const response = await api.post('/auth/register', registerData);
         
-        const data = response.data as { token?: string; userId?: number; role?: string };
+        const data = response.data as AuthResponse;
 
         localStorage.setItem('token', data.token || '');
-        localStorage.setItem('userId', (data.userId?.toString()) || '');
+        localStorage.setItem('userId', data.userId?.toString() || '');
         localStorage.setItem('userRole', data.role || 'USER');
         localStorage.setItem('userName', safeUsername || 'User');
 
         toast.success('Аккаунт создан! Давайте настроим ваш профиль.');
+        
+        // После регистрации отправляем заполнять анкету (цели, навыки) для генерации ИИ-рекомендаций
         navigate('/profile'); 
       }
     } catch (err: any) {
       console.error("❌ Ошибка аутентификации:", err);
-      const errorMessage = err.response?.data?.message || 'Ошибка доступа.';
+      // 🔥 УЛУЧШЕНИЕ: Вытаскиваем точную ошибку, которую сгенерировал валидатор Spring Boot
+      const errorMessage = err.response?.data?.message || err.response?.data?.error || 'Ошибка доступа. Проверьте введенные данные.';
       toast.error(errorMessage);
     } finally {
-      setIsLoading(false); // Разблокируем кнопку
+      setIsLoading(false); 
     }
   };
   
@@ -177,11 +197,11 @@ export function AuthPage() {
             </A.InputGroup>
 
             <A.ActionRow>
-              <label>
-                <input type="checkbox" />
+              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                <input type="checkbox" style={{ accentColor: '#4338ca' }} />
                 <span>Запомнить меня</span>
               </label>
-              {isLogin && <button type="button">Забыли пароль?</button>}
+              {isLogin && <button type="button" style={{ background: 'none', border: 'none', color: '#4338ca', cursor: 'pointer', fontSize: '13px' }}>Забыли пароль?</button>}
             </A.ActionRow>
 
             <A.MainButton type="submit" disabled={isLoading}>
@@ -190,7 +210,7 @@ export function AuthPage() {
             </A.MainButton>
           </form>
 
-          <div style={{ margin: '24px 0', color: '#94a3b8', fontSize: '14px' }}>
+          <div style={{ margin: '24px 0', color: '#94a3b8', fontSize: '14px', textAlign: 'center' }}>
             Или продолжить с
           </div>
 
@@ -200,12 +220,12 @@ export function AuthPage() {
               Google
             </button>
             <button type="button">
-                <img 
-                    src={vkLogo} 
-                    alt="VK" 
-                    style={{ width: '24px', height: '24px', objectFit: 'contain' }} 
-                />
-                VK
+              <img 
+                src={vkLogo} 
+                alt="VK" 
+                style={{ width: '24px', height: '24px', objectFit: 'contain' }} 
+              />
+              VK
             </button>
           </A.SocialGrid>
         </A.FormContainer>

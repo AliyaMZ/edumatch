@@ -230,3 +230,28 @@ export const SubmitButton = styled.button`
   }
   &:active:not(:disabled) { transform: translateY(0); }
 `;
+
+export const PageWrapper = styled.div`
+  min-height: 100vh;
+  width: 100%;
+  background-color: #f8fafc; 
+  display: flex;
+  flex-direction: column;
+  padding-top: 40px;      
+  padding-bottom: 60px;  
+  box-sizing: border-box;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+  animation: fadeIn 0.4s ease-out-into;
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+`;

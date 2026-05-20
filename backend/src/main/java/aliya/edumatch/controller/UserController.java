@@ -42,15 +42,18 @@ public class UserController {
     @Transactional
     public ResponseEntity<?> updateUserProfile(@PathVariable Long id, @RequestBody UserUpdateDTO profileData) {
         return userRepository.findById(id).map(user -> {
-            // Обновляем данные
+            // 1. Обновляем данные
             if (profileData.getUsername() != null) user.setUsername(profileData.getUsername());
             if (profileData.getGoal() != null) user.setGoal(profileData.getGoal());
             if (profileData.getLevel() != null) user.setLevel(profileData.getLevel());
             if (profileData.getHoursPerWeek() != null) user.setHoursPerWeek(profileData.getHoursPerWeek());
             if (profileData.getBudget() != null) user.setBudget(profileData.getBudget());
 
-            // Сохраняем и сразу сбрасываем в базу
             User savedUser = userRepository.saveAndFlush(user);
+
+            // 2. 🔥 КРИТИЧЕСКИЙ ШАГ: Удаляем старые "рекомендованные" записи
+            // Это заставит систему при следующем заходе на /results сгенерировать новые данные
+            userCourseRepository.deleteByUserIdAndStatus(id, "recommended");
 
             savedUser.setPassword(null);
             return ResponseEntity.ok(savedUser);
@@ -91,30 +94,32 @@ public class UserController {
             @PathVariable Long courseId,
             @RequestBody Map<String, Object> updates) {
 
-        return userCourseRepository.findByUserIdAndCourseId(userId, courseId)
-                .map(userCourse -> {
-                    // Если запись есть — обновляем
-                    if (updates.containsKey("progress")) userCourse.setProgress((Integer) updates.get("progress"));
-                    if (updates.containsKey("status")) userCourse.setStatus((String) updates.get("status"));
-                    userCourseRepository.save(userCourse);
-                    return ResponseEntity.ok(Map.of("message", "Прогресс обновлён"));
-                })
-                .orElseGet(() -> {
-                    // Если записи нет — создаем новую
-                    User user = userRepository.findById(userId).orElse(null);
-                    Course course = courseRepository.findById(courseId).orElse(null);
+        // 🔥 ИЗМЕНЕНИЕ: Ищем список записей вместо одной, чтобы избежать ошибки при дублях
+        List<UserCourse> records = userCourseRepository.findByUserIdAndCourseIdList(userId, courseId);
 
-                    if (user == null || course == null) return ResponseEntity.notFound().build();
+        if (!records.isEmpty()) {
+            // Если записи есть — берем первую и обновляем её
+            UserCourse userCourse = records.get(0);
+            if (updates.containsKey("progress")) userCourse.setProgress((Integer) updates.get("progress"));
+            if (updates.containsKey("status")) userCourse.setStatus((String) updates.get("status"));
+            userCourseRepository.save(userCourse);
+            return ResponseEntity.ok(Map.of("message", "Прогресс обновлён"));
+        } else {
+            // Если записи нет — создаем новую
+            User user = userRepository.findById(userId).orElse(null);
+            Course course = courseRepository.findById(courseId).orElse(null);
 
-                    UserCourse newUserCourse = new UserCourse();
-                    newUserCourse.setUser(user);
-                    newUserCourse.setCourse(course);
-                    newUserCourse.setProgress((Integer) updates.getOrDefault("progress", 0));
-                    newUserCourse.setStatus((String) updates.getOrDefault("status", "in_progress"));
+            if (user == null || course == null) return ResponseEntity.notFound().build();
 
-                    userCourseRepository.save(newUserCourse);
-                    return ResponseEntity.ok(Map.of("message", "Прогресс создан и обновлён"));
-                });
+            UserCourse newUserCourse = new UserCourse();
+            newUserCourse.setUser(user);
+            newUserCourse.setCourse(course);
+            newUserCourse.setProgress((Integer) updates.getOrDefault("progress", 0));
+            newUserCourse.setStatus((String) updates.getOrDefault("status", "in_progress"));
+
+            userCourseRepository.save(newUserCourse);
+            return ResponseEntity.ok(Map.of("message", "Прогресс создан и обновлён"));
+        }
     }
 
     @PostMapping("/{userId}/favorites/{courseId}")

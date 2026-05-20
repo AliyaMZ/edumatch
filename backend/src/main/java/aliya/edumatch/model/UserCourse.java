@@ -15,7 +15,7 @@ public class UserCourse {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY) // LAZY лучше для производительности
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
     private User user;
 
@@ -23,17 +23,28 @@ public class UserCourse {
     @JoinColumn(name = "course_id")
     private Course course;
 
-    @Builder.Default // Чтобы Lombok Builder тоже видел дефолтное значение
+    @Builder.Default
     private int progress = 0;
 
     @Builder.Default
-    private String status = "not_started";
+    private String status = "not_started"; // Возможные варианты теперь: not_started, in_progress, completed, recommended
 
-    // Автоматическая установка статуса перед сохранением, если он пустой
+    // 🏆 НОВЫЕ ПОЛЯ ДЛЯ AI-ПОДБОРА:
+
+    @Builder.Default
+    private Integer matchPercent = 0; // Процент соответствия курса профилю пользователя (0-100)
+
+    @Column(columnDefinition = "TEXT") // TEXT в БД, чтобы поместилось длинное обоснование от нейросети
+    private String aiAnalysis; // Персональный вердикт ИИ, почему курс подходит
+
     @PrePersist
     protected void onCreate() {
         if (this.status == null) {
             this.status = "not_started";
+        }
+        // Защита для нового поля matchPercent
+        if (this.matchPercent == null) {
+            this.matchPercent = 0;
         }
     }
 }
