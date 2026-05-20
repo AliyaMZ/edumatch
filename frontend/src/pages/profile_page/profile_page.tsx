@@ -23,7 +23,7 @@ export function ProfilePage() {
   const [fetching, setFetching] = useState(true);
 
   // 1. Загрузка текущих данных профиля при монтировании
-useEffect(() => {
+  useEffect(() => {
     if (!userId) {
       navigate('/auth');
       return;
@@ -38,17 +38,23 @@ useEffect(() => {
         if (data.username) setUsername(data.username);
         if (data.goal) setGoal(data.goal);
         
-        // Защита от Java Enum (приводим к нижнему регистру для соответствия стейту)
+        // Защита от Java Enum уровня знаний
         if (data.level) {
           setLevel(data.level.toLowerCase() as 'beginner' | 'intermediate' | 'advanced');
         }
         
         if (data.hoursPerWeek) setHours(data.hoursPerWeek);
-        if (data.budget) setBudget(data.budget);
-        if (data.preferredFormats) setFormats(data.preferredFormats);
+        if (data.budget !== undefined) setBudget(data.budget);
+        
+        // 🔥 ИСПРАВЛЕНО: Маппинг форматов из UPPER_CASE (с бэкенда) в lower_case (для UI стейта)
+        if (data.preferredFormats && Array.isArray(data.preferredFormats)) {
+          setFormats(data.preferredFormats.map((f: string) => f.toLowerCase()));
+        }
+        
         if (data.interests) setInterests(data.interests);
       } catch (err) {
         console.error("Ошибка при загрузке профиля:", err);
+        toast.error("Не удалось загрузить данные профиля");
       } finally {
         setFetching(false);
       }
@@ -83,7 +89,6 @@ useEffect(() => {
 
   // 3. Сохранение обновлений
   const handleSubmitProfile = async () => {
-    // Используем toast вместо alert для валидации
     if (!username.trim()) {
       toast.error("Пожалуйста, введите ваше имя");
       return;
@@ -106,7 +111,8 @@ useEffect(() => {
         goal: goal.trim(),
         level: level.toUpperCase(),
         hoursPerWeek: Number(hours),
-        budget: Number(budget),
+        // 🔥 ИСПРАВЛЕНО: Защита от отрицательного бюджета на случай ввода пользователем с клавиатуры
+        budget: Math.max(0, Number(budget)),
         preferredFormats: formattedToUppercase,
         interests: interests
       };
@@ -115,13 +121,11 @@ useEffect(() => {
       
       localStorage.setItem('userName', username.trim());
       
-      toast.success('Профиль успешно обновлен!'); // Заменено
+      toast.success('Профиль успешно обновлен!'); 
       navigate('/dashboard'); 
     } catch (err: any) {
       console.error("Ошибка при сохранении профиля:", err);
       const serverMessage = err.response?.data?.message || err.message;
-      
-      // Заменено: красивый вывод ошибки с сервера
       toast.error(`Не удалось сохранить изменения: ${serverMessage}`);
     } finally {
       setLoading(false);
@@ -130,12 +134,14 @@ useEffect(() => {
 
   if (fetching) {
     return (
-      <S.Container>
-        <div style={{ textAlign: 'center', paddingTop: '100px', color: '#64748b' }}>
-          <Sparkles className="animate-pulse" size={48} style={{ marginBottom: '20px', color: '#4338ca' }} />
-          <p>Загружаем настройки вашего профиля...</p>
-        </div>
-      </S.Container>
+      <S.PageWrapper>
+        <S.Container>
+          <div style={{ textAlign: 'center', paddingTop: '120px', color: '#64748b' }}>
+            <Sparkles className="animate-pulse" size={48} style={{ marginBottom: '20px', color: '#4338ca' }} />
+            <p style={{ fontSize: '16px', fontWeight: 500 }}>Загружаем настройки вашего профиля...</p>
+          </div>
+        </S.Container>
+      </S.PageWrapper>
     );
   }
 
@@ -169,7 +175,7 @@ useEffect(() => {
             />
           </div>
           <div>
-            <S.Label>Ваш текущий уровень</S.Label>
+            <S.Label>Ваш текущий уровень знаний</S.Label>
             <S.ButtonGrid>
               <S.OptionButton active={level === 'beginner'} onClick={() => setLevel('beginner')}>
                 Новичок
@@ -201,9 +207,10 @@ useEffect(() => {
             />
           </div>
           <div>
-            <S.Label><DollarSign size={18} /> Максимальный бюджет (₽)</S.Label>
+            <S.Label><DollarSign size={18} /> Максимальный бюджет на курс (₽)</S.Label>
             <S.InputField 
               type="number" 
+              min="0"
               value={budget} 
               onChange={(e) => setBudget(Number(e.target.value))} 
             />
@@ -214,7 +221,7 @@ useEffect(() => {
         <S.Card>
           <h3>Форматы и темы</h3>
           <div style={{ marginBottom: '32px' }}>
-            <S.Label>Удобные форматы</S.Label>
+            <S.Label>Удобные форматы контента</S.Label>
             <S.ButtonGrid>
               <S.OptionButton active={formats.includes('video')} onClick={() => toggleFormat('video')}>
                 <Video size={20} /> <span>Видео</span>
@@ -233,7 +240,7 @@ useEffect(() => {
               {interests.map(item => (
                 <S.Tag key={item}>
                   {item}
-                  <button onClick={() => removeInterest(item)}><X size={14} /></button>
+                  <button type="button" onClick={() => removeInterest(item)}><X size={14} /></button>
                 </S.Tag>
               ))}
               {interests.length === 0 && <p style={{ color: '#94a3b8', fontSize: '14px' }}>Темы пока не добавлены</p>}
@@ -241,15 +248,15 @@ useEffect(() => {
             <S.InputRow>
               <input 
                 type="text" 
-                placeholder="Напр: Python, Java..." 
+                placeholder="Напр: Python, React, Spring Boot..." 
                 value={newInterest} 
                 onChange={(e) => setNewInterest(e.target.value)} 
                 onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault(); 
-                  addInterest();
-                }
-              }} 
+                  if (e.key === 'Enter') {
+                    e.preventDefault(); 
+                    addInterest();
+                  }
+                }} 
               />
               <button type="button" onClick={addInterest}>Добавить</button>
             </S.InputRow>
@@ -258,7 +265,7 @@ useEffect(() => {
 
         <S.SubmitButton onClick={handleSubmitProfile} disabled={loading}>
           <Sparkles size={22} />
-          {loading ? 'Сохраняем...' : 'Применить изменения'}
+          {loading ? 'Сохраняем конфигурацию...' : 'Применить изменения и пересчитать рекомендации'}
         </S.SubmitButton>
       </S.ContentWrapper>
     </S.Container>

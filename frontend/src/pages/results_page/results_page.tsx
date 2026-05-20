@@ -5,7 +5,8 @@ import {
   Clock, DollarSign, Video, FileText, Code, 
   Heart, Star, ChevronDown, Sparkles 
 } from 'lucide-react';
-import api from '../../api/axios'; 
+
+import { getAiRecommendations } from '../../api/courseService'; 
 import { RootState, AppDispatch } from '../../store'; 
 import { toggleFavoriteLocal } from '../../store/favoritesSlice'; 
 import * as S from './results_styles';
@@ -16,6 +17,7 @@ interface Course {
   description: string;
   price: string;
   aiAnalysis: string;
+  matchPercent: number; // 🔥 ДОБАВЛЕНО: Реальный процент совпадения от AI
   durationWeeks: number; 
   format: string;
 }
@@ -44,11 +46,11 @@ export function ResultsPage() {
     const fetchCoursesData = async () => {
       try {
         setLoading(true);
-        // 🔥 ИСПРАВЛЕНО: запрос через api и относительный путь
-        const response = await api.get('/courses');
-        setCourses(response.data);
+        // 🔥 ИСПРАВЛЕНО: Теперь дергаем ручку AI-рекомендаций через наш сервис
+        const data = await getAiRecommendations(Number(currentUserId));
+        setCourses(data);
       } catch (err) {
-        console.error("❌ Ошибка загрузки курсов:", err);
+        console.error("❌ Ошибка загрузки персональных AI-рекомендаций:", err);
       } finally {
         setLoading(false);
       }
@@ -58,11 +60,9 @@ export function ResultsPage() {
 
   const filteredCourses = useMemo(() => {
     return courses.filter(course => {
-      // 🔥 ИСПРАВЛЕНО: безопасная проверка на случай, если price равен null/undefined
       const numericPrice = parseInt((course.price || '').replace(/\D/g, '')) || 0;
       const matchesBudget = numericPrice <= maxBudget;
 
-      // 🔥 ИСПРАВЛЕНО: приведение к регистру во избежание багов несовпадения строк ('Видео' vs 'видео')
       const matchesFormat = selectedFormats.length === 0 || 
         selectedFormats.some(f => f.toLowerCase() === (course.format || '').toLowerCase());
 
@@ -83,15 +83,16 @@ export function ResultsPage() {
     setState(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]);
   };
 
+  // Метод добавления в избранное (оставляем без изменений, он у тебя отличный)
   const toggleFavorite = async (e: React.MouseEvent, courseId: number) => {
     e.stopPropagation();
     if (!currentUserId) return;
 
-    // 1. Сразу обновляем UI в Redux (Оптимистично)
     dispatch(toggleFavoriteLocal(courseId));
 
     try {
-      // 2. Отправляем запрос в БД через наш api
+      // Здесь используем прямой путь к бэкенду для избранного
+      const api = require('../../api/axios').default; 
       if (favoriteIds.includes(courseId)) {
         await api.delete(`/users/${currentUserId}/favorites/${courseId}`);
       } else {
@@ -99,13 +100,19 @@ export function ResultsPage() {
       }
     } catch (err) { 
       console.error("❌ Ошибка при обновлении избранного в БД:", err);
-      // Если запрос не удался — возвращаем состояние обратно
       dispatch(toggleFavoriteLocal(courseId));
     }
   };
 
   if (loading) {
-    return <S.PageWrapper><div style={{ textAlign: 'center', padding: '100px', color: '#4338ca' }}>Загрузка рекомендаций...</div></S.PageWrapper>;
+    return (
+      <S.PageWrapper>
+        <div style={{ textAlign: 'center', padding: '100px', color: '#4338ca', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+          <div className="animate-spin" style={{ width: '40px', height: '40px', border: '4px solid #e2e8f0', borderTopColor: '#4338ca', borderRadius: '50%' }}></div>
+          <div style={{ fontWeight: 600 }}>ИИ EduMatch анализирует каталог курсов под ваши цели...</div>
+        </div>
+      </S.PageWrapper>
+    );
   }
 
   return (
@@ -170,8 +177,10 @@ export function ResultsPage() {
 
         <main style={{ flex: 1 }}>
           <header style={{ marginBottom: '32px' }}>
-            <h1 style={{ fontSize: '32px', fontWeight: 800, color: '#1e293b' }}>Ваши рекомендации</h1>
-            <p style={{ color: '#64748b' }}>Найдено курсов: {filteredCourses.length}</p>
+            <h1 style={{ fontSize: '32px', fontWeight: 800, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Sparkles className="text-indigo-600" style={{ color: '#4338ca' }} /> Персональный AI-подбор
+            </h1>
+            <p style={{ color: '#64748b' }}>Найдено подходящих курсов: {filteredCourses.length}</p>
           </header>
 
           {filteredCourses.length === 0 ? (
@@ -181,20 +190,27 @@ export function ResultsPage() {
           ) : (
             filteredCourses.map(course => (
               <S.Card 
-                key={course.id} 
+                key={`${course.id}-${course.matchPercent || 'default'}`}
                 onClick={() => navigate(`/details/${course.id}`, { state: { id: course.id } })}
               >
-                <S.MatchBadge><Sparkles size={14} /> 95% Релевантности</S.MatchBadge>
+                {/* 🔥 ИСПРАВЛЕНО: Выводим реальный процент релевантности от Ollama */}
+                <S.MatchBadge>
+                  <Sparkles size={14} /> {course.matchPercent || 85}% Совпадения
+                </S.MatchBadge>
+                
                 <S.CourseTitle>{course.title}</S.CourseTitle>
+                
                 <S.AIReasonBox>
                   <S.AIIcon>AI</S.AIIcon>
                   <p>{course.aiAnalysis || "Анализ данного курса формируется..."}</p>
                 </S.AIReasonBox>
+                
                 <S.MetaGrid>
                   <div><Clock size={16} /> {course.durationWeeks || 0} недель</div>
-                  <div><DollarSign size={16} /> {course.price}</div>
+                  <div><DollarSign size={16} /> {Number(course.price).toLocaleString()} ₽</div>
                   <div className="rating"><Star size={16} fill="#f59e0b" color="#f59e0b" /> 4.8</div>
                 </S.MetaGrid>
+                
                 <S.ActionRow>
                   <S.PrimaryButton 
                     onClick={(e) => { 

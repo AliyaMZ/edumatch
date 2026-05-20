@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShieldAlert, Sparkles } from 'lucide-react';
+import { ShieldAlert, Sparkles, Clock, Layers } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-
-// 🔥 ИСПРАВЛЕНО: импортируем наш настроенный инстанс
 import api from '../../api/axios'; 
 import * as S from './add_course_styles';
 
@@ -15,7 +13,6 @@ export function AddCoursePage() {
   useEffect(() => {
     const role = localStorage.getItem('userRole');
     if (role !== 'ADMIN') {
-      // 2. Заменяем alert на toast.error
       toast.error('Доступ запрещен! Только для администраторов.');
       navigate('/dashboard'); 
     } else {
@@ -23,11 +20,13 @@ export function AddCoursePage() {
     }
   }, [navigate]);
 
+  // 🔥 ИСПРАВЛЕНО: Убрали aiAnalysis, добавили durationWeeks и format
   const [formData, setFormData] = useState({
     title: '',
     description: '',
     price: '',
-    aiAnalysis: '',
+    durationWeeks: '',
+    format: 'VIDEO', // Значение по умолчанию
     url: ''
   });
 
@@ -36,31 +35,30 @@ export function AddCoursePage() {
     setLoading(true);
     
     try {
+      // 🔥 ИСПРАВЛЕНО: Формируем объект в строгом соответствии с бэкендом и типами данных
       const courseData = {
         title: formData.title.trim(),
         description: formData.description.trim(),
         price: formData.price.trim(),
-        aiAnalysis: formData.aiAnalysis.trim(),
-        url: formData.url.trim()
+        durationWeeks: parseInt(formData.durationWeeks) || 0, // Приводим к числу (integer в БД)
+        format: formData.format, // Строка: VIDEO, TEXT, PRACTICE
+        url: formData.url.trim(),
+        aiAnalysis: null // Изначально общий курс не имеет персонального анализа
       };
 
       await api.post('/courses', courseData);
       
-      // 3. Заменяем успех на toast.success
       toast.success('Курс успешно добавлен!');
       navigate('/dashboard'); 
     } catch (err: any) {
       console.error("❌ Ошибка при сохранении курса:", err);
       const serverMessage = err.response?.data?.message || err.response?.data?.error;
-      
-      // 4. Заменяем ошибку на toast.error
       toast.error(serverMessage ? `Ошибка: ${serverMessage}` : 'Произошла ошибка при сохранении');
     } finally {
       setLoading(false);
     }
   };
 
-  // 🔥 ИСПРАВЛЕНО: Пока роль проверяется, показываем заглушку, а не секретную форму
   if (!hasAccess) {
     return (
       <S.PageContainer>
@@ -99,39 +97,68 @@ export function AddCoursePage() {
           <S.InputGroup>
             <label>Описание</label>
             <textarea 
-              placeholder="О чем этот курс?" 
+              placeholder="О чем этот курс? Укажите стек технологий, ключевые слова и сложность (Junior/Middle) для ИИ-анализа." 
               value={formData.description}
               onChange={e => setFormData({...formData, description: e.target.value})}
               required 
             />
           </S.InputGroup>
 
-          <S.InputGroup>
-            <label>Стоимость</label>
-            <input 
-              type="text" 
-              placeholder="Напр: 45 000 ₽" 
-              value={formData.price}
-              onChange={e => setFormData({...formData, price: e.target.value})}
-            />
-          </S.InputGroup>
+          {/* Двухколоночный ряд для цены и длительности */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            <S.InputGroup>
+              <label>Стоимость (числом)</label>
+              <input 
+                type="text" 
+                placeholder="Напр: 45000" 
+                value={formData.price}
+                onChange={e => setFormData({...formData, price: e.target.value})}
+                required
+              />
+            </S.InputGroup>
 
+            <S.InputGroup>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><Clock size={14} /> Длительность (в неделях)</label>
+              <input 
+                type="number" 
+                min="1"
+                placeholder="Напр: 12" 
+                value={formData.durationWeeks}
+                onChange={e => setFormData({...formData, durationWeeks: e.target.value})}
+                required
+              />
+            </S.InputGroup>
+          </div>
+
+          {/* Выбор формата курса */}
           <S.InputGroup>
-            <label>AI Анализ (почему этот курс подходит пользователю?)</label>
-            <textarea 
-              placeholder="Этот курс подходит вам, потому что..." 
-              value={formData.aiAnalysis}
-              onChange={e => setFormData({...formData, aiAnalysis: e.target.value})}
-            />
+            <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><Layers size={14} /> Формат обучения</label>
+            <select 
+              value={formData.format}
+              onChange={e => setFormData({...formData, format: e.target.value})}
+              style={{
+                width: '100%',
+                padding: '10px',
+                borderRadius: '8px',
+                border: '1px solid #cbd5e1',
+                backgroundColor: '#white',
+                fontSize: '14px'
+              }}
+            >
+              <option value="VIDEO">Видео-лекции</option>
+              <option value="TEXT">Текстовые материалы</option>
+              <option value="PRACTICE">Интерактивная практика / Кодинг</option>
+            </select>
           </S.InputGroup>
 
           <S.InputGroup>
             <label>Ссылка на курс (URL)</label>
             <input 
               type="url" 
-              placeholder="https://example.com" 
+              placeholder="https://example.com/course" 
               value={formData.url}
               onChange={e => setFormData({...formData, url: e.target.value})}
+              required
             />
           </S.InputGroup>
 
