@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import api from '../../api/axios'; 
-import { toast } from 'react-hot-toast'; // 🔥 Добавлено для уведомлений
+import { toast } from 'react-hot-toast';
 
 import { 
   Clock, Video, Heart, ExternalLink, 
@@ -33,7 +33,6 @@ export function DetailPage() {
   const location = useLocation();
   const dispatch = useDispatch<AppDispatch>();
   
-  // 🔥 УЛУЧШЕНИЕ: Принудительно приводим ID к числу сразу, чтобы избежать багов сравнения string/number
   const courseId = location.state?.id ? Number(location.state.id) : null;
   const currentUserId = localStorage.getItem('userId');
 
@@ -56,7 +55,6 @@ export function DetailPage() {
       setLoading(true);
       setError(null);
 
-      // 1. Делаем только ОДИН запрос за данными курса с анализом ИИ
       const endpoint = currentUserId 
         ? `/courses/${courseId}/user/${currentUserId}` 
         : `/courses/${courseId}`;
@@ -65,7 +63,6 @@ export function DetailPage() {
       console.log("Данные курса с сервера:", courseRes.data);
       let found = courseRes.data as Course;
       
-      // 2. Если авторизован, подтягиваем прогресс
       if (currentUserId) {
         try {
           const favRes = await api.get(`/users/${currentUserId}/favorites`);
@@ -81,7 +78,7 @@ export function DetailPage() {
       
       setCourse(found);
     } catch (err: any) {
-      console.error("❌ Ошибка загрузки деталей курса:", err);
+      console.error("Ошибка загрузки деталей курса:", err);
       setError("Не удалось загрузить информацию о курсе.");
     } finally {
       setLoading(false);
@@ -98,14 +95,14 @@ export function DetailPage() {
       return;
     }
 
-    // Оптимистичное обновление локального хранилища Redux
+   
     dispatch(toggleFavoriteLocal(courseId));
 
     try {
       if (isFavorite) {
         await api.delete(`/users/${currentUserId}/favorites/${courseId}`);
         toast.success("Курс удален из сохраненных");
-        // Обнуляем локальный прогресс в стейте, так как курс больше не в избранном
+        
         if (course) {
           setCourse({ ...course, progress: 0, status: 'NOT_STARTED' });
         }
@@ -127,10 +124,10 @@ export function DetailPage() {
     const currentProgress = course.progress || 0;
     const newProgress = Math.min(currentProgress + 10, 100);
     
-    // 🔥 ИСПРАВЛЕНО: Изменено на UPPER_CASE ('COMPLETED' / 'IN_PROGRESS') для соответствия Enum в Spring Boot
+   
     const newStatus = newProgress === 100 ? 'COMPLETED' : 'IN_PROGRESS';
 
-    // Оптимистичное обновление UI
+   
     setCourse({ ...course, progress: newProgress, status: newStatus });
 
     try {
@@ -142,7 +139,7 @@ export function DetailPage() {
     } catch (err) {
       console.error("Ошибка обновления прогресса:", err);
       toast.error("Сбой синхронизации прогресса");
-      fetchData(); // Откат к серверным данным в случае ошибки
+      fetchData(); 
     }
   };
 
@@ -154,7 +151,7 @@ export function DetailPage() {
     return <Globe size={20} color="#4338ca" />;
   };
 
-  // Статический массив модулей программы (пока нет динамического с бэкенда)
+  
   const modules = [
     { title: 'Модуль 1: Основы и концепции темы', lessons: ['Введение в предметную область', 'Настройка рабочего окружения и инструментов', 'Создание первого базового проекта'] },
     { title: 'Модуль 2: Продвинутое проектирование', lessons: ['Глубокое погружение в паттерны', 'Оптимизация производительности решения', 'Автоматическое тестирование модулей'] }
@@ -237,7 +234,6 @@ export function DetailPage() {
 
           <S.Sidebar>
             <S.PriceCard>
-              {/* 🔥 УЛУЧШЕНИЕ: Безопасный рендеринг цен с форматированием локали */}
               <div style={{ fontSize: '2.3rem', fontWeight: 800, color: '#1e293b', letterSpacing: '-0.5px' }}>
                 {parseInt(course.price) ? `${Number(course.price).toLocaleString()} ₽` : course.price}
               </div>

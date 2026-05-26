@@ -9,7 +9,6 @@ export function ProfilePage() {
   const navigate = useNavigate();
   const userId = localStorage.getItem('userId');
   
-  // Состояния для данных профиля
   const [username, setUsername] = useState(localStorage.getItem('userName') || '');
   const [goal, setGoal] = useState('');
   const [level, setLevel] = useState<'beginner' | 'intermediate' | 'advanced'>('beginner');
@@ -22,7 +21,7 @@ export function ProfilePage() {
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
 
-  // 1. Загрузка текущих данных профиля при монтировании
+ 
   useEffect(() => {
     if (!userId) {
       navigate('/auth');
@@ -38,7 +37,7 @@ export function ProfilePage() {
         if (data.username) setUsername(data.username);
         if (data.goal) setGoal(data.goal);
         
-        // Защита от Java Enum уровня знаний
+        
         if (data.level) {
           setLevel(data.level.toLowerCase() as 'beginner' | 'intermediate' | 'advanced');
         }
@@ -46,7 +45,7 @@ export function ProfilePage() {
         if (data.hoursPerWeek) setHours(data.hoursPerWeek);
         if (data.budget !== undefined) setBudget(data.budget);
         
-        // 🔥 ИСПРАВЛЕНО: Маппинг форматов из UPPER_CASE (с бэкенда) в lower_case (для UI стейта)
+        
         if (data.preferredFormats && Array.isArray(data.preferredFormats)) {
           setFormats(data.preferredFormats.map((f: string) => f.toLowerCase()));
         }
@@ -63,11 +62,11 @@ export function ProfilePage() {
     loadCurrentProfile();
   }, [userId, navigate]);
 
-  // 2. Логика управления форматами и интересами
+  
   const toggleFormat = (format: string) => {
     setFormats(prev => {
       if (prev.includes(format)) {
-        // Защита: не позволяем убрать единственный выбранный формат
+        
         if (prev.length === 1) return prev; 
         return prev.filter(f => f !== format);
       }
@@ -87,7 +86,7 @@ export function ProfilePage() {
     setInterests(interests.filter(i => i !== item));
   };
 
-  // 3. Сохранение обновлений
+ 
   const handleSubmitProfile = async () => {
     if (!username.trim()) {
       toast.error("Пожалуйста, введите ваше имя");
@@ -111,7 +110,6 @@ export function ProfilePage() {
         goal: goal.trim(),
         level: level.toUpperCase(),
         hoursPerWeek: Number(hours),
-        // 🔥 ИСПРАВЛЕНО: Защита от отрицательного бюджета на случай ввода пользователем с клавиатуры
         budget: Math.max(0, Number(budget)),
         preferredFormats: formattedToUppercase,
         interests: interests
@@ -153,7 +151,7 @@ export function ProfilePage() {
           <p>Отредактируйте свои данные, чтобы AI точнее подбирал курсы</p>
         </S.Header>
 
-        {/* --- ОСНОВНАЯ ИНФОРМАЦИЯ --- */}
+      
         <S.Card>
           <h3>Личные данные</h3>
           <div style={{ marginBottom: '24px' }}>
@@ -190,7 +188,7 @@ export function ProfilePage() {
           </div>
         </S.Card>
 
-        {/* --- РЕСУРСЫ --- */}
+        
         <S.Card>
           <h3>Ваши возможности</h3>
           <div style={{ marginBottom: '32px' }}>
@@ -217,7 +215,7 @@ export function ProfilePage() {
           </div>
         </S.Card>
 
-        {/* --- ПРЕДПОЧТЕНИЯ --- */}
+       
         <S.Card>
           <h3>Форматы и темы</h3>
           <div style={{ marginBottom: '32px' }}>

@@ -27,22 +27,22 @@ public class UserCourse {
     private int progress = 0;
 
     @Builder.Default
-    private String status = "not_started"; // Возможные варианты теперь: not_started, in_progress, completed, recommended
+    private String status = "not_started";
 
-    // 🏆 НОВЫЕ ПОЛЯ ДЛЯ AI-ПОДБОРА:
+
 
     @Builder.Default
-    private Integer matchPercent = 0; // Процент соответствия курса профилю пользователя (0-100)
+    private Integer matchPercent = 0;
 
-    @Column(columnDefinition = "TEXT") // TEXT в БД, чтобы поместилось длинное обоснование от нейросети
-    private String aiAnalysis; // Персональный вердикт ИИ, почему курс подходит
+    @Column(columnDefinition = "TEXT")
+    private String aiAnalysis;
 
     @PrePersist
     protected void onCreate() {
         if (this.status == null) {
             this.status = "not_started";
         }
-        // Защита для нового поля matchPercent
+
         if (this.matchPercent == null) {
             this.matchPercent = 0;
         }

@@ -20,8 +20,8 @@ interface Course {
   description: string;
   aiAnalysis: string;
   url: string; 
-  progress: number; // 🔥 ИСПРАВЛЕНО: Сделано обязательным для отображения прогресс-бара
-  status: string;   // 🔥 ИСПРАВЛЕНО: Сделано обязательным
+  progress: number; 
+  status: string;   
 }
 
 interface UserProfile {
@@ -64,7 +64,6 @@ export function DashboardPage() {
 
       setProfile(profileRes.data);
       
-      // 🔥 УЛУЧШЕНИЕ: Гарантируем дефолтные значения для прогресса, если они пришли null с бэкенда
       const normalizedCourses = favCoursesRes.data.map((c: any) => ({
         ...c,
         progress: c.progress ?? 0,
@@ -78,7 +77,7 @@ export function DashboardPage() {
       
       setError(null);
     } catch (err: any) {
-      console.error("❌ Ошибка при загрузке данных дашборда:", err);
+      console.error(" Ошибка при загрузке данных дашборда:", err);
       setError("Не удалось загрузить данные личного кабинета.");
     } finally {
       if (!silent) setLoading(false);
@@ -101,10 +100,9 @@ export function DashboardPage() {
 
   const handleUpdateProgress = async (courseId: number, currentProgress: number) => {
     const newProgress = Math.min(currentProgress + 10, 100);
-    // Приводим к UPPER_CASE в соответствии со стандартами перечислений (Enum) в Java
+  
     const newStatus = newProgress === 100 ? 'COMPLETED' : 'IN_PROGRESS';
 
-    // Оптимистичное обновление интерфейса
     setAllCourses(prev => prev.map(c => 
       c.id === courseId ? { ...c, progress: newProgress, status: newStatus } : c
     ));
@@ -235,7 +233,6 @@ export function DashboardPage() {
                 </S.InfoBlock>
               </S.GridTwoCols>
 
-              {/* 🔥 ДОБАВЛЕНО: Рендеринг интересов пользователя, если они есть */}
               {profile.interests && profile.interests.length > 0 && (
                 <S.InfoBlock style={{ marginTop: '20px' }}>
                   <label>Ваши интересы и стек технологий</label>

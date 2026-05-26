@@ -11,10 +11,9 @@ public class CourseResponse {
     private String description;
     private String price;
     private String format;
-    private Integer durationWeeks; // 🔥 Исправлено под вашу сущность
+    private Integer durationWeeks;
     private String url;
 
-    // Поля для персональной интеграции с ИИ (из user_courses)
     private Integer matchPercent;
     private String aiAnalysis;
 }

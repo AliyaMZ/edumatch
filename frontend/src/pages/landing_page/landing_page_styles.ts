@@ -18,7 +18,6 @@ export const Section = styled.section<{ variant?: 'white' | 'gray' }>`
   background-color: ${props => (props.variant === 'white' ? '#ffffff' : 'transparent')};
 `;
 
-// --- Hero Section ---
 export const HeroGrid = styled.div`
   display: grid;
   grid-template-columns: 1.2fr 1fr;
@@ -53,7 +52,6 @@ export const Subtitle = styled.p`
   max-width: 540px;
 `;
 
-// --- AI Visualization (Card) ---
 export const AICard = styled.div`
   background: white;
   border-radius: 24px;
@@ -70,7 +68,7 @@ export const AnalysisRow = styled.div<{ color: string }>`
   align-items: center;
   justify-content: space-between;
   padding: 16px;
-  background: ${props => props.color}08; // 8% прозрачности цвета
+  background: ${props => props.color}08; 
   border-radius: 16px;
   border: 1px solid ${props => props.color}20;
 
@@ -96,7 +94,6 @@ export const AnalysisRow = styled.div<{ color: string }>`
   .percentage { font-size: 18px; font-weight: 800; color: #10b981; }
 `;
 
-// --- How it Works (Steps with Lines) ---
 export const StepsGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -126,7 +123,6 @@ export const StepItem = styled.div`
     box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
   }
 
-  /* Линия между шагами */
   &:not(:last-child)::after {
     content: '';
     position: absolute;

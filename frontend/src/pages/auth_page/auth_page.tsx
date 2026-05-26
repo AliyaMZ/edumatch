@@ -12,7 +12,7 @@ interface AuthResponse {
   token?: string;
   userId?: number;
   role?: string;
-  username?: string; // На случай, если бэкенд возвращает подтвержденное имя
+  username?: string; 
 }
 
 export function AuthPage() {
@@ -41,11 +41,11 @@ export function AuthPage() {
     const safeUsername = (username || '').trim();
 
     try {
-      // Очистка старых данных сессии перед новым входом/регистрацией
+
       ['token', 'userId', 'userRole', 'userName'].forEach(key => localStorage.removeItem(key));
 
       if (isLogin) {
-        // Отправляем запрос на авторизацию
+  
         const response = await api.post('/auth/login', {
           email: safeEmail,
           password: safePassword
@@ -53,7 +53,6 @@ export function AuthPage() {
 
         const data = response.data as AuthResponse;
 
-        // Сохраняем сессию в локальное хранилище
         localStorage.setItem('token', data.token || '');
         localStorage.setItem('userId', data.userId?.toString() || '');
         localStorage.setItem('userRole', data.role || 'USER');
@@ -61,9 +60,8 @@ export function AuthPage() {
 
         toast.success('Успешный вход!');
         
-        // 🔥 УЛУЧШЕНИЕ: Если вошел админ — сразу отправляем его в админку, а не на общий дашборд
         if (data.role === 'ADMIN') {
-          navigate('/add-course'); // или твой общий роут админ-панели
+          navigate('/add-course');
         } else {
           navigate('/dashboard'); 
         }
@@ -85,12 +83,10 @@ export function AuthPage() {
 
         toast.success('Аккаунт создан! Давайте настроим ваш профиль.');
         
-        // После регистрации отправляем заполнять анкету (цели, навыки) для генерации ИИ-рекомендаций
         navigate('/profile'); 
       }
     } catch (err: any) {
-      console.error("❌ Ошибка аутентификации:", err);
-      // 🔥 УЛУЧШЕНИЕ: Вытаскиваем точную ошибку, которую сгенерировал валидатор Spring Boot
+      console.error(" Ошибка аутентификации:", err);
       const errorMessage = err.response?.data?.message || err.response?.data?.error || 'Ошибка доступа. Проверьте введенные данные.';
       toast.error(errorMessage);
     } finally {

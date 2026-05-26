@@ -53,7 +53,7 @@ const App = () => {
       <Global styles={globalStyles} />
       <ScrollToTop />
       
-      {/* 2. Добавляем Toaster в дерево компонентов */}
+      
       <Toaster 
         position="top-right"
         toastOptions={{

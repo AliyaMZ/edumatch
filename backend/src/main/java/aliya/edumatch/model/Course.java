@@ -26,10 +26,8 @@ public class Course {
 
     private String url;
 
-    // Количество недель (для фильтрации по длительности)
     @Column(name = "duration_weeks")
     private Integer durationWeeks;
 
-    // Формат обучения (Видео, Текст, Практика)
     private String format;
 }
