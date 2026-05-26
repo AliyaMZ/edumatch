@@ -17,7 +17,7 @@ interface Course {
   description: string;
   price: string;
   aiAnalysis: string;
-  matchPercent: number; // 🔥 ДОБАВЛЕНО: Реальный процент совпадения от AI
+  matchPercent: number; 
   durationWeeks: number; 
   format: string;
 }
@@ -46,11 +46,11 @@ export function ResultsPage() {
     const fetchCoursesData = async () => {
       try {
         setLoading(true);
-        // 🔥 ИСПРАВЛЕНО: Теперь дергаем ручку AI-рекомендаций через наш сервис
+        
         const data = await getAiRecommendations(Number(currentUserId));
         setCourses(data);
       } catch (err) {
-        console.error("❌ Ошибка загрузки персональных AI-рекомендаций:", err);
+        console.error(" Ошибка загрузки персональных AI-рекомендаций:", err);
       } finally {
         setLoading(false);
       }
@@ -83,7 +83,7 @@ export function ResultsPage() {
     setState(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]);
   };
 
-  // Метод добавления в избранное (оставляем без изменений, он у тебя отличный)
+  
   const toggleFavorite = async (e: React.MouseEvent, courseId: number) => {
     e.stopPropagation();
     if (!currentUserId) return;
@@ -91,7 +91,6 @@ export function ResultsPage() {
     dispatch(toggleFavoriteLocal(courseId));
 
     try {
-      // Здесь используем прямой путь к бэкенду для избранного
       const api = require('../../api/axios').default; 
       if (favoriteIds.includes(courseId)) {
         await api.delete(`/users/${currentUserId}/favorites/${courseId}`);
@@ -99,7 +98,7 @@ export function ResultsPage() {
         await api.post(`/users/${currentUserId}/favorites/${courseId}`);
       }
     } catch (err) { 
-      console.error("❌ Ошибка при обновлении избранного в БД:", err);
+      console.error("Ошибка при обновлении избранного в БД:", err);
       dispatch(toggleFavoriteLocal(courseId));
     }
   };
@@ -193,7 +192,7 @@ export function ResultsPage() {
                 key={`${course.id}-${course.matchPercent || 'default'}`}
                 onClick={() => navigate(`/details/${course.id}`, { state: { id: course.id } })}
               >
-                {/* 🔥 ИСПРАВЛЕНО: Выводим реальный процент релевантности от Ollama */}
+                
                 <S.MatchBadge>
                   <Sparkles size={14} /> {course.matchPercent || 85}% Совпадения
                 </S.MatchBadge>

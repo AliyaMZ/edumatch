@@ -12,7 +12,7 @@ import java.util.HashSet;
 @Entity
 @Table(name = "users")
 @Data
-// Эта аннотация предотвращает ошибки при ленивой загрузке Hibernate
+
 @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class User {
     @Id
@@ -25,13 +25,13 @@ public class User {
     private String email;
 
     @Column(name = "password", nullable = false, updatable = false)
-    @JsonIgnore // Пароль никогда не должен уходить на фронтенд
+    @JsonIgnore
     private String password;
 
     @Column(nullable = false)
     private String role = "USER";
 
-    // --- ПОЛЯ ДЛЯ ПРОФИЛЯ ОБУЧЕНИЯ ---
+
 
     @Column(columnDefinition = "TEXT")
     private String goal;
@@ -50,18 +50,18 @@ public class User {
     @CollectionTable(name = "user_interests", joinColumns = @JoinColumn(name = "user_id"))
     private List<String> interests = new ArrayList<>();
 
-    // --- ИЗБРАННЫЕ КУРСЫ ---
+
     @ManyToMany(cascade = {CascadeType.PERSIST, CascadeType.MERGE})
     @JoinTable(
             name = "user_favorites",
             joinColumns = @JoinColumn(name = "user_id"),
             inverseJoinColumns = @JoinColumn(name = "course_id")
     )
-    @JsonIgnore // Чтобы избежать циклической ссылки при получении пользователя
+    @JsonIgnore
     private Set<Course> favoriteCourses = new HashSet<>();
 
-    // --- ПРОГРЕСС ПО КУРСАМ ---
+
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
-    @JsonIgnore // Обязательно исключаем, чтобы Jackson не зациклился на этой связи
+    @JsonIgnore
     private List<UserCourse> courseProgress = new ArrayList<>();
 }

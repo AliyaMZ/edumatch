@@ -1,6 +1,6 @@
 package aliya.edumatch.controller;
 
-import aliya.edumatch.dto.CourseResponse; // 🔥 Добавили импорт нашего DTO
+import aliya.edumatch.dto.CourseResponse;
 import aliya.edumatch.service.RecommendationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,9 +31,9 @@ public class RecommendationController {
 
             List<CourseResponse> response = recommendationService.getOrCreateRecommendations(userId);
 
-            // 🔥 ДОБАВЛЕНА ОТЛАДКА: Если список пуст, мы увидим это в логах
+
             if (response == null || response.isEmpty()) {
-                log.warn("⚠️ СЕРВИС ВЕРНУЛ ПУСТОЙ СПИСОК для пользователя {}", userId);
+                log.warn(" СЕРВИС ВЕРНУЛ ПУСТОЙ СПИСОК для пользователя {}", userId);
             } else {
                 log.info("Успешно отправлено {} рекомендаций для пользователя {}", response.size(), userId);
             }

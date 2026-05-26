@@ -20,28 +20,26 @@ public class CourseService {
 
     @Transactional(readOnly = true)
     public CourseResponse getCourseDetailsForUser(Long courseId, Long userId) {
-        // 1. Ищем курс в БД
+
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> new RuntimeException("Курс не найден"));
 
-        // 2. Ищем персональную рекомендацию ИИ для этого пользователя
         Optional<UserCourse> aiRecommendation = userCourseRepository.findByUserIdAndCourseId(userId, courseId);
 
-        // 3. Собираем DTO ответа
         CourseResponse.CourseResponseBuilder responseBuilder = CourseResponse.builder()
                 .id(course.getId())
                 .title(course.getTitle())
                 .description(course.getDescription())
                 .price(course.getPrice())
                 .format(course.getFormat())
-                .durationWeeks(course.getDurationWeeks()) // 🔥 Подставили durationWeeks
+                .durationWeeks(course.getDurationWeeks())
                 .url(course.getUrl());
 
-        // Если ИИ уже анализировал курс для этого юзера, берём данные оттуда
+
         if (aiRecommendation.isPresent()) {
             UserCourse uc = aiRecommendation.get();
             responseBuilder.matchPercent(uc.getMatchPercent());
-            responseBuilder.aiAnalysis(uc.getAiAnalysis()); // Персональный текст от ИИ
+            responseBuilder.aiAnalysis(uc.getAiAnalysis());
         } else {
             responseBuilder.matchPercent(null);
             responseBuilder.aiAnalysis(null);

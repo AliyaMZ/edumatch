@@ -23,7 +23,6 @@ public class CourseController {
     @Autowired
     private UserCourseRepository userCourseRepository;
 
-    // 1. ПОЛУЧИТЬ ВСЕ КУРСЫ (С фильтрами)
     @GetMapping
     public List<Course> getCourses(
             @RequestParam(required = false) String search,
@@ -35,19 +34,18 @@ public class CourseController {
                 .filter(c -> search == null || c.getTitle().toLowerCase().contains(search.toLowerCase()))
                 .filter(c -> {
                     if (maxPrice == null) return true;
-                    if (c.getPrice() == null) return true; // ✨ ОПТИМИЗАЦИЯ: защита от NullPointerException
+                    if (c.getPrice() == null) return true;
                     try {
-                        // Очистка строки цены от лишних символов (₽, $, пробелы) для корректного сравнения
                         String priceStr = c.getPrice().replaceAll("[^0-9]", "");
                         return Double.parseDouble(priceStr) <= maxPrice;
                     } catch (Exception e) {
-                        return true; // Если цену нельзя распарсить, не отфильтровываем
+                        return true;
                     }
                 })
                 .collect(Collectors.toList());
     }
 
-    // 2. ПОЛУЧИТЬ КУРС ПО ID
+
     @GetMapping("/{id}")
     public ResponseEntity<Course> getCourseById(@PathVariable Long id) {
         return courseRepository.findById(id)
@@ -55,30 +53,26 @@ public class CourseController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // 3. СОЗДАНИЕ КУРСА
     @PostMapping
-    @PreAuthorize("hasAuthority('ADMIN')") // Защищено: только для ADMIN
+    @PreAuthorize("hasAuthority('ADMIN')")
     public Course createCourse(@RequestBody Course course) {
         return courseRepository.save(course);
     }
 
-    // 4. УДАЛЕНИЕ КУРСА ИЗ СИСТЕМЫ
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAuthority('ADMIN')") // Защищено: только для ADMIN
+    @PreAuthorize("hasAuthority('ADMIN')")
     public ResponseEntity<?> deleteCourse(@PathVariable Long id) {
         return courseRepository.findById(id).map(course -> {
             try {
                 courseRepository.delete(course);
                 return ResponseEntity.ok().<Void>build();
             } catch (Exception e) {
-                // Если курс в избранном у кого-то, возникнет ошибка FK Constraint
                 return ResponseEntity.status(409).body("Нельзя удалить курс, который находится в избранном у пользователей");
             }
         }).orElse(ResponseEntity.notFound().build());
     }
 
-    // 🔥 ДОБАВИТЬ ЭТОТ МЕТОД В CourseController
-    // 🔥 ОБНОВЛЕННЫЙ МЕТОД: Безопасная работа с дублями
+
     @GetMapping("/{courseId}/user/{userId}")
     public ResponseEntity<Course> getCourseDetailsForUser(@PathVariable Long courseId, @PathVariable Long userId) {
         System.out.println("DEBUG: Запрос деталей курса " + courseId + " для юзера " + userId);
@@ -86,11 +80,11 @@ public class CourseController {
         return courseRepository.findById(courseId)
                 .map(course -> {
                     try {
-                        // Используем метод, который возвращает List, чтобы избежать ошибки "non-unique result"
+
                         List<UserCourse> records = userCourseRepository.findByUserIdAndCourseIdList(userId, courseId);
 
                         if (!records.isEmpty()) {
-                            // Берем первую запись, если их вдруг оказалось несколько
+
                             UserCourse uc = records.get(0);
                             String analysis = uc.getAiAnalysis();
 

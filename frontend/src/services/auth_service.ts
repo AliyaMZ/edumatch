@@ -18,7 +18,7 @@ export interface AuthResponse {
     username: string;
     role: string;
   };
-  token?: string; // Будет после внедрения JWT
+  token?: string; 
 }
 
 export const AuthService = {
@@ -43,7 +43,6 @@ export const AuthService = {
   // Логаут
   logout: () => {
     localStorage.removeItem('token');
-    // Можно добавить вызов эндпоинта /logout, если будет на бэке
   },
 
   // Проверка: авторизован ли пользователь

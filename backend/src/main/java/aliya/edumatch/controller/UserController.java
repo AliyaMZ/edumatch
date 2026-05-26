@@ -42,7 +42,7 @@ public class UserController {
     @Transactional
     public ResponseEntity<?> updateUserProfile(@PathVariable Long id, @RequestBody UserUpdateDTO profileData) {
         return userRepository.findById(id).map(user -> {
-            // 1. Обновляем данные
+
             if (profileData.getUsername() != null) user.setUsername(profileData.getUsername());
             if (profileData.getGoal() != null) user.setGoal(profileData.getGoal());
             if (profileData.getLevel() != null) user.setLevel(profileData.getLevel());
@@ -51,8 +51,7 @@ public class UserController {
 
             User savedUser = userRepository.saveAndFlush(user);
 
-            // 2. 🔥 КРИТИЧЕСКИЙ ШАГ: Удаляем старые "рекомендованные" записи
-            // Это заставит систему при следующем заходе на /results сгенерировать новые данные
+
             userCourseRepository.deleteByUserIdAndStatus(id, "recommended");
 
             savedUser.setPassword(null);
@@ -77,7 +76,7 @@ public class UserController {
                         .orElse(null);
 
                 courseMap.put("progress", userCourse != null ? userCourse.getProgress() : 0);
-                // 🔥 ВАЖНО: Добавили передачу статуса
+
                 courseMap.put("status", userCourse != null ? userCourse.getStatus() : "not_started");
 
                 return courseMap;
@@ -94,18 +93,18 @@ public class UserController {
             @PathVariable Long courseId,
             @RequestBody Map<String, Object> updates) {
 
-        // 🔥 ИЗМЕНЕНИЕ: Ищем список записей вместо одной, чтобы избежать ошибки при дублях
+
         List<UserCourse> records = userCourseRepository.findByUserIdAndCourseIdList(userId, courseId);
 
         if (!records.isEmpty()) {
-            // Если записи есть — берем первую и обновляем её
+
             UserCourse userCourse = records.get(0);
             if (updates.containsKey("progress")) userCourse.setProgress((Integer) updates.get("progress"));
             if (updates.containsKey("status")) userCourse.setStatus((String) updates.get("status"));
             userCourseRepository.save(userCourse);
             return ResponseEntity.ok(Map.of("message", "Прогресс обновлён"));
         } else {
-            // Если записи нет — создаем новую
+
             User user = userRepository.findById(userId).orElse(null);
             Course course = courseRepository.findById(courseId).orElse(null);
 
@@ -140,11 +139,9 @@ public class UserController {
     @Transactional
     public ResponseEntity<?> removeCourseFromFavorites(@PathVariable Long userId, @PathVariable Long courseId) {
         return userRepository.findById(userId).map(user -> {
-            // Пытаемся удалить
+
             boolean removed = user.getFavoriteCourses().removeIf(c -> c.getId().equals(courseId));
 
-            // Даже если курс не был найден в коллекции, мы все равно можем вернуть успех,
-            // либо оставить текущую логику, если это критично для фронтенда.
             userRepository.save(user);
             return ResponseEntity.ok(Map.of("message", "Курс удален или уже отсутствовал"));
         }).orElse(ResponseEntity.notFound().build());

@@ -1,12 +1,10 @@
 import api from './axios'; 
 
-// Базовые относительные пути, так как baseURL ('http://localhost:8080/api') уже зашит внутри api
 const COURSES_ENDPOINT = '/courses';
 const USERS_ENDPOINT = '/users';
 
 export const getCourses = async () => {
     try {
-        // 🔥 ИСПРАВЛЕНО: Заменяем axios на api
         const response = await api.get(COURSES_ENDPOINT);
         return response.data;
     } catch (error) {
@@ -21,7 +19,6 @@ export const getCourses = async () => {
  */
 export const getAiRecommendations = async (userId: number) => {
     try {
-        // 🔥 ИСПРАВЛЕНО: Заменяем axios на api. Теперь токен прикрепится автоматически!
         const response = await api.get(`/users/${userId}/recommendations`, {
             timeout: 60000 
         });

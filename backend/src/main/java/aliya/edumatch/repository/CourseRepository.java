@@ -6,6 +6,4 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface CourseRepository extends JpaRepository<Course, Long> {
-    // Здесь пока ничего не нужно писать.
-    // Все базовые методы (сохранить, удалить, найти) уже добавлены через JpaRepository.
 }

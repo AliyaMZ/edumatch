@@ -15,7 +15,7 @@ public interface UserCourseRepository extends JpaRepository<UserCourse, Long> {
 
     List<UserCourse> findByUserIdAndStatus(Long userId, String status);
 
-    // 🔥 ДОБАВЛЕНО: Аннотации для корректного удаления
+
     @Modifying
     @Query("DELETE FROM UserCourse uc WHERE uc.user.id = :userId AND uc.status = :status")
     void deleteByUserIdAndStatus(@Param("userId") Long userId, @Param("status") String status);

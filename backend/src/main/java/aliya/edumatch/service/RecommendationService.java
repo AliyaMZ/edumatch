@@ -1,7 +1,7 @@
 package aliya.edumatch.service;
 
 import aliya.edumatch.dto.AiRecommendationResponse;
-import aliya.edumatch.dto.CourseResponse; // 🔥 Добавили импорт DTO
+import aliya.edumatch.dto.CourseResponse;
 import aliya.edumatch.model.Course;
 import aliya.edumatch.model.User;
 import aliya.edumatch.model.UserCourse;
@@ -32,28 +32,27 @@ public class RecommendationService {
     private final ObjectMapper objectMapper;
 
     @Transactional
-    // 🔥 ИСПРАВЛЕНО: Теперь возвращаем List<CourseResponse> вместо List<UserCourse>
+
     public List<CourseResponse> getOrCreateRecommendations(Long userId) {
 
-        // 1. Проверяем кэшированные рекомендации
+
         List<UserCourse> existing = userCourseRepository.findByUserIdAndStatus(userId, "recommended");
         if (!existing.isEmpty()) {
             log.info("Найдены кэшированные рекомендации для пользователя с ID: {}", userId);
-            return mapToCourseResponse(existing); // Конвертируем в DTO
+            return mapToCourseResponse(existing);
         }
 
-        // 2. Ищем пользователя в БД
+
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("Пользователь не найден"));
 
-        // 3. Достаем все курсы для фильтрации
+
         List<Course> allCourses = courseRepository.findAll();
         if (allCourses.isEmpty()) {
             log.warn("В базе данных нет доступных курсов!");
             return new ArrayList<>();
         }
 
-        // 🔥 УМНЫЙ ГИБРИДНЫЙ ФИЛЬТР: Бюджет + Ветвь IT / Интересы пользователя
         List<Course> filteredCourses = allCourses.stream()
                 .filter(course -> {
                     if (user.getBudget() == null) {
@@ -120,7 +119,6 @@ public class RecommendationService {
 
         log.info("Передаем на анализ ИИ {} курс(ов) из общего пула ({})", filteredCourses.size(), allCourses.size());
 
-        // 4. Формируем безопасный промпт
         String userPrompt = String.format(
                 "Ты — эксперт по профориентации. Твоя задача — сопоставить профиль студента с доступными курсами.\n\n" +
                         "Профиль студента:\n" +
@@ -156,7 +154,6 @@ public class RecommendationService {
             long endTime = System.currentTimeMillis();
             log.info("Ollama успешно сгенерировала ответ за {} мс", (endTime - startTime));
 
-            // 5. Десериализуем ответ в DTO
             String cleanedResponse = aiRawResponse.trim();
             if (cleanedResponse.contains("```json")) {
                 cleanedResponse = cleanedResponse.substring(cleanedResponse.indexOf("```json") + 7);
@@ -171,7 +168,7 @@ public class RecommendationService {
             }
             cleanedResponse = cleanedResponse.trim();
 
-            System.out.println("👉 СЫРОЙ ОТВЕТ ОТ OLLAMA:\n" + cleanedResponse);
+            System.out.println(" СЫРОЙ ОТВЕТ ОТ OLLAMA:\n" + cleanedResponse);
 
             List<AiRecommendationResponse> recommendations;
 
@@ -191,7 +188,7 @@ public class RecommendationService {
                 recommendations = new ArrayList<>();
             }
 
-            // 6. Сохраняем результаты в базу (С ПРОВЕРКОЙ НА ДУБЛИ)
+
             List<UserCourse> savedRecommendations = new ArrayList<>();
 
             for (AiRecommendationResponse rec : recommendations) {
@@ -216,12 +213,9 @@ public class RecommendationService {
                                 .build();
                         log.info("Создана новая рекомендация для курса ID: {}", course.getId());
                     }
-                    // 🔥 ВАЖНО: Всегда добавляем в список, чтобы потом его вернуть
                     savedRecommendations.add(userCourseRepository.save(userCourse));
                 }
             }
-
-            // 🔥 ИСПРАВЛЕНО: Конвертируем только что созданные рекомендации в плоские CourseResponse DTO
             return mapToCourseResponse(savedRecommendations);
 
         } catch (Exception e) {
@@ -230,7 +224,7 @@ public class RecommendationService {
         }
     }
 
-    // 🔥 ДОБАВЛЕНО: Удобный приватный метод-маппер для преобразования UserCourse -> CourseResponse
+
     private List<CourseResponse> mapToCourseResponse(List<UserCourse> userCourses) {
         return userCourses.stream().map(uc -> {
             Course c = uc.getCourse();
@@ -240,7 +234,7 @@ public class RecommendationService {
                     .description(c.getDescription())
                     .price(c.getPrice())
                     .format(c.getFormat())
-                    .durationWeeks(c.getDurationWeeks()) // ⚡ Передаем недели (убираем баг с 0 недель)
+                    .durationWeeks(c.getDurationWeeks())
                     .url(c.getUrl())
                     .matchPercent(uc.getMatchPercent())
                     .aiAnalysis(uc.getAiAnalysis())
@@ -251,7 +245,7 @@ public class RecommendationService {
     private String formatCoursesForAi(List<Course> courses) {
         StringBuilder sb = new StringBuilder();
         for (Course c : courses) {
-            // Включаем duration_weeks в информацию для ИИ, чтобы он тоже понимал длительность
+
             sb.append(String.format("ID: %s, Название: \"%s\", Описание: \"%s\", Цена: %s, Формат: %s, Длительность: %s недель\n",
                     c.getId(), c.getTitle(), c.getDescription(), c.getPrice(), c.getFormat(), c.getDurationWeeks()));
         }

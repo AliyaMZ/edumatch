@@ -6,21 +6,21 @@ import * as S from './landing_page_styles';
 export function LandingPage() {
   const navigate = useNavigate();
 
-  // 🔥 ОПТИМИЗАЦИЯ: Единый обработчик для всех кнопок призыва к действию (CTA)
+  
   const handleStartNavigation = () => {
     const userId = localStorage.getItem('userId');
     if (userId) {
-      // Если пользователь авторизован — сразу отправляем в личный кабинет
+      
       navigate('/dashboard');
     } else {
-      // Если гость — отправляем на авторизацию/регистрацию
+      
       navigate('/auth');
     }
   };
 
   return (
     <S.PageWrapper>
-      {/* 1. Hero Section */}
+      
       <S.Container>
         <S.HeroGrid>
           <div className="content">
@@ -72,7 +72,7 @@ export function LandingPage() {
         </S.HeroGrid>
       </S.Container>
 
-      {/* 2. How it Works */}
+      
       <S.Section variant="white" id="how-it-works">
         <S.Container>
           <h2 style={{textAlign: 'center', fontSize: '36px', fontWeight: 800, marginBottom: '60px', color: '#1e293b'}}>
@@ -98,7 +98,7 @@ export function LandingPage() {
         </S.Container>
       </S.Section>
 
-      {/* 3. Features */}
+      
       <S.Section id="features">
         <S.Container>
           <h2 style={{textAlign: 'center', fontSize: '36px', fontWeight: 800, marginBottom: '60px', color: '#1e293b'}}>
@@ -126,7 +126,7 @@ export function LandingPage() {
         </S.Container>
       </S.Section>
 
-      {/* 4. CTA (Call to Action) Section */}
+      
       <div id="cta-start" style={{
         background: 'linear-gradient(135deg, #4338ca 0%, #10b981 100%)',
         padding: '90px 0',

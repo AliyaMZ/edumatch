@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import styled from '@emotion/styled';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 
-// --- Styled Components (без изменений) ---
 
 const NavContainer = styled.header`
   position: fixed;
@@ -57,7 +56,6 @@ const Logo = styled(Link)`
   }
 `;
 
-// --- Logic ---
 
 export function Header() {
   const navigate = useNavigate();
@@ -131,7 +129,6 @@ export function Header() {
             </>
           ) : (
             <>
-              {/* Оставлена только кнопка выхода для авторизованных пользователей */}
               <button 
                 onClick={handleLogout}
                 style={{ 
